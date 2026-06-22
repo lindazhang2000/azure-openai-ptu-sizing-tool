@@ -28,16 +28,22 @@ with left:
     )
     preset = MODEL_PRESETS.get(selected_model, {})
 
+    foundry_mode = st.checkbox(
+        "Match Foundry calculator (size for peak, no buffer)",
+        value=False,
+        help="Mirrors the official Foundry PTU calculator: treats RPM as the peak, with no baseline load factor and no safety buffer. Uncheck for the field-guidance baseline + spillover view.",
+    )
+
     c1, c2, c3 = st.columns(3)
     with c1:
-        avg_rpm = st.number_input("Average RPM", min_value=0.0, value=float(DEFAULTS["avg_rpm"]), step=1.0)
+        avg_rpm = st.number_input("Average RPM" if not foundry_mode else "Peak RPM", min_value=0.0, value=float(DEFAULTS["avg_rpm"]), step=1.0)
         avg_input_tokens = st.number_input("Average input tokens / request", min_value=0.0, value=float(DEFAULTS["avg_input_tokens"]), step=1.0)
     with c2:
         avg_output_tokens = st.number_input("Average output tokens / request", min_value=0.0, value=float(DEFAULTS["avg_output_tokens"]), step=1.0)
-        p95_multiplier = st.slider("P95 load multiplier", min_value=1.0, max_value=5.0, value=float(DEFAULTS["p95_multiplier"]), step=0.1)
+        p95_multiplier = st.slider("P95 load multiplier", min_value=1.0, max_value=5.0, value=1.0 if foundry_mode else float(DEFAULTS["p95_multiplier"]), step=0.1, disabled=foundry_mode)
     with c3:
         cache_rate = st.slider("Prompt cache rate", min_value=0.0, max_value=0.9, value=float(DEFAULTS["cache_rate"]), step=0.05)
-        baseline_load_factor = st.slider("Baseline load factor", min_value=0.4, max_value=1.0, value=float(DEFAULTS["baseline_load_factor"]), step=0.05)
+        baseline_load_factor = st.slider("Baseline load factor", min_value=0.4, max_value=1.0, value=1.0 if foundry_mode else float(DEFAULTS["baseline_load_factor"]), step=0.05, disabled=foundry_mode)
 
     with st.expander("Advanced assumptions", expanded=True):
         a1, a2, a3, a4, a5 = st.columns(5)
@@ -46,7 +52,7 @@ with left:
         with a2:
             output_weight = st.number_input("Output weighting", min_value=0.0, value=float(preset.get("output_weight", DEFAULTS["output_weight"])), step=0.1, disabled=bool(preset))
         with a3:
-            safety_buffer = st.number_input("Safety buffer", min_value=0.0, value=float(DEFAULTS["safety_buffer"]), step=0.01, format="%.2f")
+            safety_buffer = st.number_input("Safety buffer", min_value=0.0, value=0.0 if foundry_mode else float(DEFAULTS["safety_buffer"]), step=0.01, format="%.2f", disabled=foundry_mode)
         with a4:
             min_ptu_commit = st.number_input("Minimum PTU commit", min_value=0.0, value=float(preset.get("min_ptu_commit", DEFAULTS["min_ptu_commit"])), step=1.0, disabled=bool(preset))
         with a5:
@@ -57,15 +63,17 @@ with left:
         with b1:
             ptu_hourly_price = st.number_input("PTU hourly price (USD)", min_value=0.0, value=float(DEFAULTS["ptu_hourly_price"]), step=0.01)
         with b2:
-            reservation_discount = st.slider("Reservation discount", min_value=0.0, max_value=0.7, value=float(DEFAULTS["reservation_discount"]), step=0.05, help="Discount off the hourly PTU price for a 1-month or 1-year Azure Reservation. 0 = pure hourly.")
+            reservation_discount_monthly = st.slider("Monthly reservation discount", min_value=0.0, max_value=0.9, value=float(DEFAULTS["reservation_discount_monthly"]), step=0.01, help="Discount off the hourly PTU price for a 1-month Azure Reservation (~64% for gpt-5.x).")
         with b3:
-            paygo_input_per_1m = st.number_input("PAYGO input / 1M tokens (USD)", min_value=0.0, value=float(DEFAULTS["paygo_input_per_1m"]), step=0.01)
+            reservation_discount_yearly = st.slider("Yearly reservation discount", min_value=0.0, max_value=0.9, value=float(DEFAULTS["reservation_discount_yearly"]), step=0.01, help="Discount off the hourly PTU price for a 1-year Azure Reservation (~70% for gpt-5.x).")
         with b4:
-            paygo_cached_per_1m = st.number_input("PAYGO cached input / 1M (USD)", min_value=0.0, value=float(DEFAULTS["paygo_cached_per_1m"]), step=0.01, help="Cached prompt tokens are billed at a discounted rate, not free.")
-        b5, b6 = st.columns(2)
+            paygo_input_per_1m = st.number_input("PAYGO input / 1M tokens (USD)", min_value=0.0, value=float(DEFAULTS["paygo_input_per_1m"]), step=0.01)
+        b5, b6, b7 = st.columns(3)
         with b5:
-            paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, value=float(DEFAULTS["paygo_output_per_1m"]), step=0.01)
+            paygo_cached_per_1m = st.number_input("PAYGO cached input / 1M (USD)", min_value=0.0, value=float(DEFAULTS["paygo_cached_per_1m"]), step=0.01, help="Cached prompt tokens are billed at a discounted rate, not free.")
         with b6:
+            paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, value=float(DEFAULTS["paygo_output_per_1m"]), step=0.01)
+        with b7:
             hours_per_month = st.number_input("Hours per month", min_value=1.0, value=float(DEFAULTS["hours_per_month"]), step=1.0)
 
 values = {
@@ -81,7 +89,8 @@ values = {
     "min_ptu_commit": min_ptu_commit,
     "ptu_scale_increment": ptu_scale_increment,
     "ptu_hourly_price": ptu_hourly_price,
-    "reservation_discount": reservation_discount,
+    "reservation_discount_monthly": reservation_discount_monthly,
+    "reservation_discount_yearly": reservation_discount_yearly,
     "paygo_input_per_1m": paygo_input_per_1m,
     "paygo_cached_per_1m": paygo_cached_per_1m,
     "paygo_output_per_1m": paygo_output_per_1m,
@@ -106,12 +115,23 @@ with right:
 
 st.subheader("Monthly cost comparison")
 m1, m2, m3, m4 = st.columns(4)
-ptu_label = "PTU monthly (reserved)" if reservation_discount > 0 else "PTU monthly (hourly)"
-m1.metric(ptu_label, f'${calc["ptu_monthly"]:,.0f}', help=f'Hourly list: ${calc["ptu_hourly_monthly"]:,.0f}/mo before any reservation discount.')
+m1.metric("PTU monthly (1-mo reserved)", f'${calc["ptu_monthly"]:,.0f}', help=f'Hourly list: ${calc["ptu_hourly_monthly"]:,.0f}/mo before any reservation discount.')
 m2.metric("PAYGO monthly", f'${calc["paygo_monthly"]:,.0f}')
 m3.metric("PTU + spillover", f'${calc["blended_monthly"]:,.0f}', help=f'Reserved PTU baseline plus PAYGO for the ~{calc["spill_fraction"]*100:,.0f}% of peak demand above provisioned capacity.')
 delta_label = "PTU saves" if calc["savings_delta"] >= 0 else "PAYGO saves"
 m4.metric(delta_label, f'${abs(calc["savings_delta"]):,.0f}')
+
+pricing_df = pd.DataFrame([
+    {
+        "Term": t["term"],
+        "Per PTU / month": f'${t["per_ptu_monthly"]:,.0f}',
+        "Estimated monthly cost": f'${t["total_monthly"]:,.0f}',
+        "Savings vs hourly": "-" if t["savings"] == 0 else f'{t["savings"]*100:,.0f}%',
+    }
+    for t in calc["pricing_tiers"]
+])
+st.caption(f'PTU pricing tiers (for {calc["recommended_ptu"]:,.0f} PTUs) — same layout as the Foundry PTU calculator')
+st.dataframe(pricing_df, use_container_width=True, hide_index=True)
 
 chart_df = pd.DataFrame([
     {"Scenario": "Baseline PTU", "PTUs": calc["recommended_ptu"]},

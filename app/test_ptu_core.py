@@ -22,10 +22,11 @@ def test_defaults_match_expected_scenario():
     # burst_ratio = p95/avg = p95_multiplier (peak-to-mean)
     assert r["burst_ratio"] == pytest.approx(1.8)
 
-    # Cost: reservation discount 0 -> reserved == hourly
-    assert r["ptu_monthly"] == pytest.approx(120 * 15.0 * 730)
-    assert r["ptu_hourly_monthly"] == pytest.approx(120 * 15.0 * 730)
-    assert r["ptu_reserved_monthly"] == pytest.approx(r["ptu_monthly"])
+    # Cost: hourly list = 120 PTU * $1/hr * 730h; 1-mo reservation = 64% off
+    assert r["ptu_hourly_monthly"] == pytest.approx(120 * 1.0 * 730)
+    assert r["ptu_monthly_reserved"] == pytest.approx(120 * 1.0 * 730 * (1 - 0.64))
+    assert r["ptu_yearly_reserved"] == pytest.approx(120 * 1.0 * 730 * (1 - 0.70))
+    assert r["ptu_monthly"] == pytest.approx(r["ptu_monthly_reserved"])
     assert r["savings_delta"] == pytest.approx(r["paygo_monthly"] - r["ptu_monthly"])
 
     # Steady, baseline above minimum -> PTU-first
@@ -53,21 +54,44 @@ def test_cached_tokens_billed_at_discounted_rate_not_free():
     assert pricier["cached_input_tokens_monthly"] > 0
 
 
-def test_reservation_discount_reduces_ptu_cost():
-    full = calculate({**DEFAULTS, "reservation_discount": 0.0})
-    discounted = calculate({**DEFAULTS, "reservation_discount": 0.30})
-    assert discounted["ptu_monthly"] == pytest.approx(full["ptu_monthly"] * 0.70)
-    # Hourly list price is unaffected by the reservation discount
-    assert discounted["ptu_hourly_monthly"] == pytest.approx(full["ptu_hourly_monthly"])
+def test_reservation_tiers_discount_hourly_price():
+    r = calculate(DEFAULTS)
+    tiers = {t["term"]: t for t in r["pricing_tiers"]}
+    assert tiers["Hourly"]["savings"] == 0.0
+    assert tiers["Monthly reservation"]["savings"] == pytest.approx(0.64)
+    assert tiers["Yearly reservation"]["savings"] == pytest.approx(0.70)
+    # Reserved tiers are cheaper than hourly, yearly cheapest
+    assert tiers["Monthly reservation"]["total_monthly"] < tiers["Hourly"]["total_monthly"]
+    assert tiers["Yearly reservation"]["total_monthly"] < tiers["Monthly reservation"]["total_monthly"]
+    # Per-PTU figure is the monthly total divided by PTU count
+    assert tiers["Hourly"]["per_ptu_monthly"] == pytest.approx(1.0 * 730)
+
+
+def test_gpt51_preset_matches_foundry_calculator():
+    # Foundry calculator: gpt-5.1, Peak RPM 200, 2000 input / 400 output, 50% cache -> 180 PTUs.
+    # Foundry sizes for peak with no buffer/baseline factor.
+    vals = {
+        **DEFAULTS,
+        **MODEL_PRESETS["gpt-5.1"],
+        "avg_rpm": 200,
+        "avg_input_tokens": 2000,
+        "avg_output_tokens": 400,
+        "cache_rate": 0.50,
+        "p95_multiplier": 1.0,
+        "baseline_load_factor": 1.0,
+        "safety_buffer": 0.0,
+    }
+    r = calculate(vals)
+    assert r["recommended_ptu"] == 180
 
 
 def test_blended_spillover_between_reserved_and_paygo():
     r = calculate(DEFAULTS)
     assert 0 <= r["spill_fraction"] <= 1
     # Blended = reserved baseline + a fraction of PAYGO -> never below reserved
-    assert r["blended_monthly"] >= r["ptu_reserved_monthly"]
+    assert r["blended_monthly"] >= r["ptu_monthly_reserved"]
     assert r["blended_monthly"] == pytest.approx(
-        r["ptu_reserved_monthly"] + r["spill_fraction"] * r["paygo_monthly"]
+        r["ptu_monthly_reserved"] + r["spill_fraction"] * r["paygo_monthly"]
     )
 
 

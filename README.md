@@ -77,7 +77,8 @@ To flip the recommendation, keep everything else fixed and move just the **P95 m
 
 ### Model preset
 
-- **Model preset** — selecting a model (`gpt-4.1`, `gpt-5`, `gpt-4o`, `Llama-3.3-70B`) auto-fills the official sizing constants — **Model TPM per PTU**, **Output weighting** (output-to-input ratio), **Minimum PTU commit**, and **PTU scale increment** — and locks those fields. Choose **Custom** to edit them freely. Values mirror the Microsoft Learn sizing tables and should still be re-verified against current docs.
+- **Model preset** — selecting a model (`gpt-4.1`, `gpt-5`, `gpt-5.1`, `gpt-4o`, `Llama-3.3-70B`) auto-fills the official sizing constants — **Model TPM per PTU**, **Output weighting** (output-to-input ratio), **Minimum PTU commit**, and **PTU scale increment** — and locks those fields. Choose **Custom** to edit them freely. Values mirror the Microsoft Learn sizing tables and should still be re-verified against current docs.
+- **Match Foundry calculator (size for peak, no buffer)** — a checkbox that mirrors the official in-portal [PTU calculator](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/provisioned-throughput-sizing): RPM is treated as the **peak**, with `p95_multiplier = 1`, `baseline_load_factor = 1`, and `safety_buffer = 0`. With `gpt-5.1`, Peak RPM 200, 2000 input / 400 output tokens, and 50% cache it reproduces the calculator's **180 PTUs** exactly. Leave it unchecked for the field-guidance baseline + spillover view.
 
 ### Workload inputs
 
@@ -114,18 +115,20 @@ recommendedPTU    = max( roundedUp( (baselineTPM / modelTpmPerPtu) × (1 + safet
 
 ### Cost assumptions (PTU vs PAYGO comparison)
 
-- **PTU hourly price (USD)** — list price per PTU per hour → `recommendedPTU × price × hoursPerMonth`. Shown in the metric help as the pre-discount hourly cost.
-- **Reservation discount** — fraction off the hourly price for a 1-month or 1-year Azure Reservation (production PTU is normally reserved, not hourly). The headline **PTU monthly** uses the discounted reserved price; `0` = pure hourly.
+- **PTU hourly price (USD)** — list price per PTU per hour. The default (~$1/PTU/hr) matches the gpt-5.x rate shown in the Foundry calculator; re-verify per model and region.
+- **Monthly / Yearly reservation discount** — fraction off the hourly price for a 1-month or 1-year Azure Reservation. Defaults (~64% / ~70%) match the Foundry calculator's gpt-5.x tiers. The headline **PTU monthly** uses the 1-month reserved price.
 - **PAYGO input / 1M tokens** and **PAYGO output / 1M tokens** — consumption pricing for uncached input and output tokens.
 - **PAYGO cached input / 1M tokens** — cached prompt tokens are billed at a **discounted rate, not free**, so the comparison does not overstate PAYGO savings.
 - **Hours per month** — billing window (730 ≈ a full month) used for both PTU cost and total request volume.
 
-Three cost lines are shown:
+The app shows the same three-tier pricing table as the Foundry calculator (Hourly / Monthly reservation / Yearly reservation, with per-PTU cost and savings %), plus the PAYGO and blended spillover comparison:
 
 ```
-PTU monthly      = recommendedPTU × hourlyPrice × (1 − reservationDiscount) × hours
+PTU hourly       = recommendedPTU × hourlyPrice × hours
+PTU 1-mo reserved = PTU hourly × (1 − monthlyDiscount)        # headline
+PTU 1-yr reserved = PTU hourly × (1 − yearlyDiscount)
 PAYGO monthly    = uncachedInput×inputRate + cachedInput×cachedRate + output×outputRate
-PTU + spillover  = PTU monthly (reserved baseline) + spillFraction × PAYGO monthly
+PTU + spillover  = PTU 1-mo reserved + spillFraction × PAYGO monthly
 ```
 
 where `spillFraction` is the share of P95 peak demand above the provisioned PTU capacity, billed to a Standard deployment.

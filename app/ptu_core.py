@@ -20,8 +20,9 @@ DEFAULTS = {
     "safety_buffer": 0.15,
     "min_ptu_commit": 15,
     "ptu_scale_increment": 5,
-    "ptu_hourly_price": 15.0,
-    "reservation_discount": 0.0,
+    "ptu_hourly_price": 1.0,
+    "reservation_discount_monthly": 0.64,
+    "reservation_discount_yearly": 0.70,
     "paygo_input_per_1m": 5.0,
     "paygo_cached_per_1m": 2.5,
     "paygo_output_per_1m": 15.0,
@@ -34,6 +35,7 @@ DEFAULTS = {
 MODEL_PRESETS = {
     "gpt-4.1": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5},
     "gpt-5": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5},
+    "gpt-5.1": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5},
     "gpt-4o": {"model_tpm_per_ptu": 2500, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5},
     "Llama-3.3-70B": {"model_tpm_per_ptu": 8450, "output_weight": 4.0, "min_ptu_commit": 100, "ptu_scale_increment": 100},
 }
@@ -47,7 +49,8 @@ def _round_up_to_increment(value, increment):
 
 def calculate(values):
     ptu_scale_increment = values.get("ptu_scale_increment", DEFAULTS["ptu_scale_increment"])
-    reservation_discount = values.get("reservation_discount", DEFAULTS["reservation_discount"])
+    reservation_discount_monthly = values.get("reservation_discount_monthly", DEFAULTS["reservation_discount_monthly"])
+    reservation_discount_yearly = values.get("reservation_discount_yearly", DEFAULTS["reservation_discount_yearly"])
     paygo_cached_per_1m = values.get("paygo_cached_per_1m", DEFAULTS["paygo_cached_per_1m"])
 
     avg_tpm = values["avg_rpm"] * (
@@ -82,10 +85,20 @@ def calculate(values):
         (output_tokens_monthly / 1_000_000) * values["paygo_output_per_1m"]
     )
 
-    reserved_hourly_price = values["ptu_hourly_price"] * (1 - reservation_discount)
     ptu_hourly_monthly = recommended_ptu * values["ptu_hourly_price"] * values["hours_per_month"]
-    ptu_reserved_monthly = recommended_ptu * reserved_hourly_price * values["hours_per_month"]
-    ptu_monthly = ptu_reserved_monthly
+    ptu_monthly_reserved = ptu_hourly_monthly * (1 - reservation_discount_monthly)
+    ptu_yearly_reserved = ptu_hourly_monthly * (1 - reservation_discount_yearly)
+    # Headline PTU cost uses the 1-month reservation (typical production baseline).
+    ptu_monthly = ptu_monthly_reserved
+
+    def _per_ptu(total):
+        return total / recommended_ptu if recommended_ptu else 0
+
+    pricing_tiers = [
+        {"term": "Hourly", "per_ptu_monthly": _per_ptu(ptu_hourly_monthly), "total_monthly": ptu_hourly_monthly, "savings": 0.0},
+        {"term": "Monthly reservation", "per_ptu_monthly": _per_ptu(ptu_monthly_reserved), "total_monthly": ptu_monthly_reserved, "savings": reservation_discount_monthly},
+        {"term": "Yearly reservation", "per_ptu_monthly": _per_ptu(ptu_yearly_reserved), "total_monthly": ptu_yearly_reserved, "savings": reservation_discount_yearly},
+    ]
 
     # Indicative blended "PTU baseline + spillover" cost: the recommended PTU
     # serves its capacity; demand above that (toward the P95 peak) spills to a
@@ -93,7 +106,7 @@ def calculate(values):
     ptu_capacity_tpm = recommended_ptu * model_tpm_per_ptu
     spill_tpm = max(p95_tpm - ptu_capacity_tpm, 0)
     spill_fraction = (spill_tpm / p95_tpm) if p95_tpm > 0 else 0
-    blended_monthly = ptu_reserved_monthly + spill_fraction * paygo_monthly
+    blended_monthly = ptu_monthly_reserved + spill_fraction * paygo_monthly
 
     fills_minimum = raw_baseline_ptu >= values["min_ptu_commit"]
     if burst_ratio >= 4:
@@ -140,8 +153,10 @@ def calculate(values):
         "output_tokens_monthly": output_tokens_monthly,
         "paygo_monthly": paygo_monthly,
         "ptu_hourly_monthly": ptu_hourly_monthly,
-        "ptu_reserved_monthly": ptu_reserved_monthly,
+        "ptu_monthly_reserved": ptu_monthly_reserved,
+        "ptu_yearly_reserved": ptu_yearly_reserved,
         "ptu_monthly": ptu_monthly,
+        "pricing_tiers": pricing_tiers,
         "blended_monthly": blended_monthly,
         "savings_delta": paygo_monthly - ptu_monthly,
         "architecture": architecture,
