@@ -58,6 +58,23 @@ def deployment_hourly_price(deployment_type):
     """Return the indicative hourly $/PTU price for a deployment type."""
     return DEPLOYMENT_PRICING.get(deployment_type, DEFAULTS["ptu_hourly_price"])
 
+# PAYGO (Standard / On-Demand) token prices also vary by deployment type. The
+# per-model `paygo_*_per_1m` rates below are the **Global Standard** base; Data
+# Zone Standard and Regional Standard are both exactly 10% higher than Global —
+# confirmed across every Azure OpenAI model on the pricing page (June 2026), e.g.
+# gpt-4.1 Global $2/$0.50/$8 -> Data Zone & Regional $2.20/$0.55/$8.80.
+# https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/
+PAYGO_DEPLOYMENT_MULTIPLIER = {
+    "Global": 1.0,
+    "Data Zone": 1.10,
+    "Regional": 1.10,
+}
+
+
+def paygo_multiplier(deployment_type):
+    """Return the Standard (PAYGO) price multiplier for a deployment type."""
+    return PAYGO_DEPLOYMENT_MULTIPLIER.get(deployment_type, 1.0)
+
 # Provisioned spillover (preview) routes overflow traffic from a provisioned
 # deployment to a matching standard deployment in the same resource. It is only
 # supported on Global and Data Zone provisioned deployments — NOT Regional.
@@ -77,9 +94,10 @@ def spillover_supported(deployment_type):
 # `available_deployments` lists the deployment types each model supports.
 # `paygo_*_per_1m` are the model's confirmed **Global Standard** PAYGO rates
 # ($/1M tokens) from the Azure OpenAI pricing page (June 2026) — Data Zone /
-# Regional standard are ~10% higher. Llama-3.3-70B is priced as a Foundry MaaS
-# model (separate pricing page), so it has no OpenAI PAYGO rate here and falls
-# back to the editable DEFAULTS. Re-verify all values against current docs.
+# Regional standard are exactly 10% higher (see PAYGO_DEPLOYMENT_MULTIPLIER).
+# Llama-3.3-70B is priced as a Foundry MaaS model (separate pricing page), so it
+# has no OpenAI PAYGO rate here and falls back to the editable DEFAULTS.
+# Re-verify all values against current docs.
 MODEL_PRESETS = {
     "gpt-5.2": {"model_tpm_per_ptu": 3400, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global"], "paygo_input_per_1m": 1.75, "paygo_cached_per_1m": 0.18, "paygo_output_per_1m": 14.0},
     "gpt-5.1": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0},
@@ -117,6 +135,20 @@ def deployment_minimums(preset, deployment_type):
         preset.get("min_ptu_commit", DEFAULTS["min_ptu_commit"]),
         preset.get("ptu_scale_increment", DEFAULTS["ptu_scale_increment"]),
     )
+
+
+def paygo_rates(preset, deployment_type):
+    """Return tier-adjusted (input, cached, output) PAYGO $/1M for a preset + deployment type.
+
+    The base rates are the model's confirmed Global Standard rates (or the
+    editable DEFAULTS for a Custom/non-OpenAI preset); Data Zone and Regional
+    Standard are exactly 10% higher (PAYGO_DEPLOYMENT_MULTIPLIER).
+    """
+    m = paygo_multiplier(deployment_type)
+    base_input = preset.get("paygo_input_per_1m", DEFAULTS["paygo_input_per_1m"])
+    base_cached = preset.get("paygo_cached_per_1m", DEFAULTS["paygo_cached_per_1m"])
+    base_output = preset.get("paygo_output_per_1m", DEFAULTS["paygo_output_per_1m"])
+    return (round(base_input * m, 4), round(base_cached * m, 4), round(base_output * m, 4))
 
 
 # Indicative region availability for provisioned throughput, by deployment type.

@@ -2,7 +2,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, region_supported, spillover_supported
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, paygo_rates, region_supported, spillover_supported
 
 st.set_page_config(page_title="PTU Sizing Demo", page_icon="⚡", layout="wide")
 
@@ -86,7 +86,8 @@ with left:
             ptu_scale_increment = st.number_input("PTU scale increment", min_value=1.0, value=float(eff_increment), step=1.0, disabled=bool(preset))
 
     with st.expander("Cost assumptions", expanded=True):
-        st.caption("Hourly price is differentiated by deployment type (Global lowest → Data Zone → Regional); reservation prices do not vary by type. Hourly/reservation values confirmed against the Azure OpenAI pricing page (Provisioned table). PAYGO defaults are the selected model's Global Standard rates — Data Zone/Regional standard are ~10% higher. Re-verify before quoting.")
+        st.caption("Hourly price is differentiated by deployment type (Global lowest → Data Zone → Regional); reservation prices do not vary by type. Hourly/reservation values confirmed against the Azure OpenAI pricing page (Provisioned table). PAYGO defaults track the selected model **and** deployment type — Global Standard base, with Data Zone/Regional Standard exactly 10% higher (confirmed). Re-verify before quoting.")
+        paygo_input_default, paygo_cached_default, paygo_output_default = paygo_rates(preset, deployment_type)
         b1, b2, b3, b4 = st.columns(4)
         with b1:
             ptu_hourly_price = st.number_input("PTU hourly price (USD)", min_value=0.0, value=float(deployment_hourly_price(deployment_type)), step=0.01, help=f"{deployment_type} provisioned hourly $/PTU. Global $1.00, Data Zone $1.10, Regional $2.00 (confirmed).")
@@ -95,12 +96,12 @@ with left:
         with b3:
             reservation_discount_yearly = st.slider("Yearly reservation discount", min_value=0.0, max_value=0.9, value=float(DEFAULTS["reservation_discount_yearly"]), step=0.01, help="Discount off the hourly PTU price for a 1-year Azure Reservation ($2,652/PTU/yr = $221/mo = ~70%).")
         with b4:
-            paygo_input_per_1m = st.number_input("PAYGO input / 1M tokens (USD)", min_value=0.0, value=float(preset.get("paygo_input_per_1m", DEFAULTS["paygo_input_per_1m"])), step=0.01)
+            paygo_input_per_1m = st.number_input("PAYGO input / 1M tokens (USD)", min_value=0.0, value=float(paygo_input_default), step=0.01, help=f"{deployment_type} Standard input rate. Global base; Data Zone/Regional are 10% higher (confirmed).")
         b5, b6, b7 = st.columns(3)
         with b5:
-            paygo_cached_per_1m = st.number_input("PAYGO cached input / 1M (USD)", min_value=0.0, value=float(preset.get("paygo_cached_per_1m", DEFAULTS["paygo_cached_per_1m"])), step=0.01, help="Cached prompt tokens are billed at a discounted rate, not free.")
+            paygo_cached_per_1m = st.number_input("PAYGO cached input / 1M (USD)", min_value=0.0, value=float(paygo_cached_default), step=0.01, help="Cached prompt tokens are billed at a discounted rate, not free.")
         with b6:
-            paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, value=float(preset.get("paygo_output_per_1m", DEFAULTS["paygo_output_per_1m"])), step=0.01)
+            paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, value=float(paygo_output_default), step=0.01)
         with b7:
             hours_per_month = st.number_input("Hours per month", min_value=1.0, value=float(DEFAULTS["hours_per_month"]), step=1.0)
 

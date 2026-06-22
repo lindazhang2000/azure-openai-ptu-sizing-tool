@@ -80,12 +80,12 @@ Take **one** steady workload and change **only the Deployment type** to see why 
 | Deployment type | Min / increment | Recommended PTUs | Hourly $/PTU | PTU monthly (1-mo reserved) | PAYGO monthly | Cheaper option |
 | --- | --- | --- | --- | --- | --- | --- |
 | Global | 15 / 5 | 120 | $1.00 | ~$31,500 | ~$21,700 | PAYGO |
-| Data Zone | 15 / 5 | 120 | $1.10 | ~$34,700 | ~$21,700 | PAYGO |
-| Regional | 50 / 50 | 150 | $2.00 | ~$78,800 | ~$21,700 | PAYGO |
+| Data Zone | 15 / 5 | 120 | $1.10 | ~$34,700 | ~$23,900 | PAYGO |
+| Regional | 50 / 50 | 150 | $2.00 | ~$78,800 | ~$23,900 | PAYGO |
 
-Two effects make Regional the most expensive: the larger **minimum / increment** rounds the 120-PTU need up to **150 PTUs**, and the **hourly price doubles** — together pushing the committed cost to **~2.5× Global** for identical traffic. The **PAYGO column is identical** across all three rows (same model, Global Standard token rates) and acts as the breakeven reference.
+Two effects make Regional the most expensive: the larger **minimum / increment** rounds the 120-PTU need up to **150 PTUs**, and the **hourly price doubles** — together pushing the committed cost to **~2.5× Global** for identical traffic. The **PAYGO column also steps up** with the deployment type — Data Zone and Regional Standard token rates are exactly **10% higher** than Global (~$21,700 → ~$23,900) — but it stays well below the committed PTU cost and remains the breakeven reference.
 
-Note the recommendation is **burst-driven, not a pure cost minimizer**: at 60 RPM with confirmed gpt-4.1 PAYGO rates ($2 in / $8 out), pay-as-you-go is actually cheaper than *any* PTU commit, so PTU here is justified by predictable latency/throughput and burst protection rather than raw cost. PTU economics improve for steadier, higher-volume traffic and for pricier models. Across all of that, the deployment-type ordering is constant: **Global is cheapest with the broadest region coverage; Data Zone is a ~10% premium for EU/US data-zone routing; Regional is the costly last resort** you pick only when data residency mandates it (and recall Regional has **no automatic spillover**).
+Note the recommendation is **burst-driven, not a pure cost minimizer**: at 60 RPM with confirmed gpt-4.1 PAYGO rates ($2 in / $8 out), pay-as-you-go is actually cheaper than *any* PTU commit, so PTU here is justified by predictable latency/throughput and burst protection rather than raw cost. PTU economics improve for steadier, higher-volume traffic and for pricier models. Across all of that, the deployment-type ordering is constant: **Global is cheapest with the broadest region coverage; Data Zone is a 10% premium for EU/US data-zone routing; Regional is the costly last resort** you pick only when data residency mandates it (and recall Regional has **no automatic spillover**).
 
 ## Understanding the inputs
 
@@ -134,7 +134,7 @@ recommendedPTU    = max( roundedUp( (baselineTPM / modelTpmPerPtu) × (1 + safet
 
 - **PTU hourly price (USD)** — list price per PTU per hour. This **varies by Deployment type**: Microsoft introduced differentiated hourly pricing where Global is the lowest, Data Zone slightly higher, and Regional the highest. The field defaults from the selected deployment type (confirmed against the Azure OpenAI pricing page: Global **$1.00**, Data Zone **$1.10**, Regional **$2.00** per PTU/hr) and stays editable; re-verify per model and region before quoting.
 - **Monthly / Yearly reservation discount** — fraction off the hourly price for a 1-month or 1-year Azure Reservation. Defaults (**64%** / **70%**) are derived from the published reservation prices: 1-month **$260/PTU/mo** vs the $730 hourly-equivalent (= 64% off), 1-year **$2,652/PTU/yr** = **$221/PTU/mo** (≈ 70% off). Reservation prices do **not** vary by deployment type — only the hourly rate differs. The headline **PTU monthly** uses the 1-month reserved price.
-- **PAYGO input / 1M tokens** and **PAYGO output / 1M tokens** — consumption pricing for uncached input and output tokens. The defaults are the **selected model's confirmed Global Standard rates** (e.g. gpt-4.1 $2.00 input / $8.00 output, gpt-4o $2.50 / $10, gpt-5/5.1 $1.25 / $10). Data Zone and Regional standard pricing run ~10% higher; the **Custom** preset falls back to an editable gpt-4.1-style default.
+- **PAYGO input / 1M tokens** and **PAYGO output / 1M tokens** — consumption pricing for uncached input and output tokens. The defaults track the **selected model and deployment type**: the model's confirmed **Global Standard** rates (e.g. gpt-4.1 $2.00 input / $8.00 output, gpt-4o $2.50 / $10, gpt-5/5.1 $1.25 / $10), with **Data Zone and Regional Standard exactly 10% higher** (confirmed across every model, e.g. gpt-4.1 $2.20 / $8.80). The **Custom** preset falls back to an editable gpt-4.1-style default.
 - **PAYGO cached input / 1M tokens** — cached prompt tokens are billed at a **discounted rate, not free** (e.g. gpt-4.1 $0.50), so the comparison does not overstate PAYGO savings.
 - **Hours per month** — billing window (730 ≈ a full month) used for both PTU cost and total request volume.
 

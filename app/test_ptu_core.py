@@ -7,12 +7,15 @@ from ptu_core import (
     DEPLOYMENT_PRICING,
     DEPLOYMENT_TYPES,
     MODEL_PRESETS,
+    PAYGO_DEPLOYMENT_MULTIPLIER,
     SPILLOVER_DEPLOYMENT_TYPES,
     available_deployment_types,
     available_regions,
     calculate,
     deployment_hourly_price,
     deployment_minimums,
+    paygo_multiplier,
+    paygo_rates,
     region_supported,
     spillover_supported,
 )
@@ -336,6 +339,42 @@ def test_llama_preset_has_no_openai_paygo_override():
     # Llama-3.3-70B is a Foundry MaaS model; it carries no OpenAI PAYGO rate and
     # falls back to the editable DEFAULTS.
     assert "paygo_input_per_1m" not in MODEL_PRESETS["Llama-3.3-70B"]
+
+
+def test_paygo_multiplier_by_deployment_type():
+    # Global is the base; Data Zone and Regional Standard are exactly 10% higher.
+    assert paygo_multiplier("Global") == 1.0
+    assert paygo_multiplier("Data Zone") == 1.10
+    assert paygo_multiplier("Regional") == 1.10
+    # Unknown/Custom type falls back to the base multiplier.
+    assert paygo_multiplier("Custom") == 1.0
+
+
+def test_paygo_rates_apply_confirmed_tier_delta():
+    preset = MODEL_PRESETS["gpt-4.1"]
+    # Global Standard base = confirmed pricing-page rates.
+    assert paygo_rates(preset, "Global") == (2.0, 0.5, 8.0)
+    # Data Zone and Regional Standard are 10% higher (confirmed gpt-4.1 values).
+    assert paygo_rates(preset, "Data Zone") == (2.2, 0.55, 8.8)
+    assert paygo_rates(preset, "Regional") == (2.2, 0.55, 8.8)
+
+
+def test_paygo_rates_fall_back_to_defaults_for_custom():
+    # A Custom/empty preset uses the editable DEFAULTS as the Global base.
+    base = paygo_rates({}, "Global")
+    assert base == (DEFAULTS["paygo_input_per_1m"], DEFAULTS["paygo_cached_per_1m"], DEFAULTS["paygo_output_per_1m"])
+
+
+def test_data_zone_paygo_costs_more_than_global():
+    # Same workload + model, only the deployment type differs: Data Zone PAYGO
+    # must be exactly 10% above Global because every token rate is 10% higher.
+    workload = {"avg_rpm": 100, "avg_input_tokens": 1500, "avg_output_tokens": 500, "p95_multiplier": 1.5, "cache_rate": 0.2}
+    preset = MODEL_PRESETS["gpt-4.1"]
+    g_in, g_cached, g_out = paygo_rates(preset, "Global")
+    d_in, d_cached, d_out = paygo_rates(preset, "Data Zone")
+    glob = calculate({**DEFAULTS, "paygo_input_per_1m": g_in, "paygo_cached_per_1m": g_cached, "paygo_output_per_1m": g_out, **workload})
+    dz = calculate({**DEFAULTS, "paygo_input_per_1m": d_in, "paygo_cached_per_1m": d_cached, "paygo_output_per_1m": d_out, **workload})
+    assert dz["paygo_monthly"] == pytest.approx(glob["paygo_monthly"] * 1.10)
 
 
 
