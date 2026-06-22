@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, calculate, deployment_hourly_price, deployment_minimums
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, calculate, deployment_hourly_price, deployment_minimums, spillover_supported
 
 st.set_page_config(page_title="PTU Sizing Demo", page_icon="⚡", layout="wide")
 
@@ -36,6 +36,10 @@ with left:
         help="Global and Data Zone provisioned share the lower minimum (e.g. 15 PTUs) and a 5-PTU scale increment. Regional provisioned uses larger model-specific minimums (e.g. 50 PTUs, 50 increment). Only the deployment types each model supports are listed; availability also varies by region — see the Microsoft Learn references.",
     )
     eff_min_ptu, eff_increment = deployment_minimums(preset, deployment_type)
+    if spillover_supported(deployment_type):
+        st.caption(f"✅ {deployment_type} provisioned supports automatic spillover to a matching Standard deployment (preview).")
+    else:
+        st.caption(f"⚠️ {deployment_type} provisioned does not support automatic spillover — use Global or Data Zone for that, or route overflow manually.")
 
     foundry_mode = st.checkbox(
         "Match Foundry calculator (size for peak, no buffer)",
@@ -107,6 +111,7 @@ values = {
     "paygo_cached_per_1m": paygo_cached_per_1m,
     "paygo_output_per_1m": paygo_output_per_1m,
     "hours_per_month": hours_per_month,
+    "spillover_supported": spillover_supported(deployment_type),
 }
 calc = calculate(values)
 

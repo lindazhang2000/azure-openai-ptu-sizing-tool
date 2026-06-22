@@ -52,6 +52,18 @@ def deployment_hourly_price(deployment_type):
     """Return the indicative hourly $/PTU price for a deployment type."""
     return DEPLOYMENT_PRICING.get(deployment_type, DEFAULTS["ptu_hourly_price"])
 
+# Provisioned spillover (preview) routes overflow traffic from a provisioned
+# deployment to a matching standard deployment in the same resource. It is only
+# supported on Global and Data Zone provisioned deployments — NOT Regional.
+# https://learn.microsoft.com/azure/foundry/openai/how-to/spillover-traffic-management
+SPILLOVER_DEPLOYMENT_TYPES = ["Global", "Data Zone"]
+
+
+def spillover_supported(deployment_type):
+    """Return True if the deployment type supports automatic provisioned spillover."""
+    return deployment_type in SPILLOVER_DEPLOYMENT_TYPES
+
+
 # Per-model sizing constants from the official PTU sizing guidance
 # (Input TPM per PTU, output-to-input ratio, and the deployment minimum/scale
 # increment for each deployment type). `min_ptu_commit`/`ptu_scale_increment`
@@ -171,6 +183,7 @@ def calculate(values):
     blended_monthly = ptu_monthly_reserved + spill_fraction * paygo_monthly
 
     fills_minimum = raw_baseline_ptu >= values["min_ptu_commit"]
+    spillover_ok = values.get("spillover_supported", True)
     if burst_ratio >= 4:
         architecture = {
             "label": "PAYGO or smaller PTU pilot",
@@ -192,13 +205,21 @@ def calculate(values):
             "reason": "Lower peak-to-mean burstiness with a baseline above the model minimum aligns well with PTU economics and predictable throughput.",
             "badge": "🔵"
         }
-    else:
+    elif spillover_ok:
         architecture = {
             "label": "PTU + Standard spillover",
-            "summary": "Recommended default for enterprise production: size PTU for the steady-state baseline and keep Standard available for bursts and overflow.",
+            "summary": "Recommended default for enterprise production: size PTU for the steady-state baseline and keep Standard available for bursts and overflow. This deployment type supports automatic spillover to a matching Standard deployment.",
             "reason": "Your burst profile suggests a baseline layer plus elasticity is safer than sizing PTU for every short-lived peak.",
             "badge": "🟢"
         }
+    else:
+        architecture = {
+            "label": "PTU baseline + manual overflow (spillover unavailable)",
+            "summary": "Your burst profile suits a PTU baseline plus elasticity, but this deployment type does not support automatic spillover. Either pick a Global or Data Zone provisioned deployment to enable spillover, or pair this PTU deployment with a separate Standard deployment and route overflow yourself.",
+            "reason": "Automatic provisioned spillover (preview) is only supported on Global and Data Zone provisioned deployments, not Regional.",
+            "badge": "🟡"
+        }
+    architecture["spillover_supported"] = spillover_ok
 
     return {
         "avg_tpm": avg_tpm,
@@ -222,5 +243,6 @@ def calculate(values):
         "blended_monthly": blended_monthly,
         "savings_delta": paygo_monthly - ptu_monthly,
         "architecture": architecture,
+        "spillover_supported": spillover_ok,
         "reservation_note": "Reservation should be treated as a billing optimization after workload validation, not as the first step and not as capacity by itself."
     }

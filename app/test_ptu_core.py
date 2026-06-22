@@ -7,10 +7,12 @@ from ptu_core import (
     DEPLOYMENT_PRICING,
     DEPLOYMENT_TYPES,
     MODEL_PRESETS,
+    SPILLOVER_DEPLOYMENT_TYPES,
     available_deployment_types,
     calculate,
     deployment_hourly_price,
     deployment_minimums,
+    spillover_supported,
 )
 
 
@@ -248,5 +250,35 @@ def test_regional_costs_more_than_global_for_same_workload():
     assert r["ptu_hourly_monthly"] > g["ptu_hourly_monthly"]
     assert r["ptu_monthly_reserved"] > g["ptu_monthly_reserved"]
 
+
+def test_spillover_supported_only_for_global_and_data_zone():
+    assert spillover_supported("Global") is True
+    assert spillover_supported("Data Zone") is True
+    assert spillover_supported("Regional") is False
+    assert SPILLOVER_DEPLOYMENT_TYPES == ["Global", "Data Zone"]
+
+
+def test_spillover_supported_default_preserves_legacy_recommendation():
+    # No spillover_supported key -> defaults to True -> classic spillover label.
+    r = calculate({**DEFAULTS, "p95_multiplier": 3.0})
+    assert r["spillover_supported"] is True
+    assert r["architecture"]["label"] == "PTU + Standard spillover"
+    assert r["architecture"]["spillover_supported"] is True
+
+
+def test_regional_burst_recommendation_flags_no_spillover():
+    # Same burst profile, but Regional cannot auto-spill -> manual overflow label.
+    r = calculate({**DEFAULTS, "p95_multiplier": 3.0, "spillover_supported": False})
+    assert r["spillover_supported"] is False
+    assert r["architecture"]["label"] == "PTU baseline + manual overflow (spillover unavailable)"
+    assert r["architecture"]["spillover_supported"] is False
+
+
+def test_spillover_flag_does_not_change_non_spillover_recommendations():
+    # Steady (burst < 2) recommends PTU-first regardless of spillover support.
+    steady_global = calculate({**DEFAULTS, "p95_multiplier": 1.8})
+    steady_regional = calculate({**DEFAULTS, "p95_multiplier": 1.8, "spillover_supported": False})
+    assert steady_global["architecture"]["label"] == "PTU-first production baseline"
+    assert steady_regional["architecture"]["label"] == "PTU-first production baseline"
 
 
