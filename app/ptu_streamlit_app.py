@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, calculate, deployment_minimums
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, calculate, deployment_hourly_price, deployment_minimums
 
 st.set_page_config(page_title="PTU Sizing Demo", page_icon="⚡", layout="wide")
 
@@ -69,9 +69,10 @@ with left:
             ptu_scale_increment = st.number_input("PTU scale increment", min_value=1.0, value=float(eff_increment), step=1.0, disabled=bool(preset))
 
     with st.expander("Cost assumptions", expanded=True):
+        st.caption("Hourly price is differentiated by deployment type (Global lowest → Data Zone → Regional). Monthly/yearly reservation prices do not vary by deployment type. All values are indicative — verify on the Azure pricing page.")
         b1, b2, b3, b4 = st.columns(4)
         with b1:
-            ptu_hourly_price = st.number_input("PTU hourly price (USD)", min_value=0.0, value=float(DEFAULTS["ptu_hourly_price"]), step=0.01)
+            ptu_hourly_price = st.number_input("PTU hourly price (USD)", min_value=0.0, value=float(deployment_hourly_price(deployment_type)), step=0.01, help=f"Indicative {deployment_type} provisioned hourly $/PTU. Global ~$1.00, Data Zone ~$1.10, Regional ~$2.00 — confirm per model and region.")
         with b2:
             reservation_discount_monthly = st.slider("Monthly reservation discount", min_value=0.0, max_value=0.9, value=float(DEFAULTS["reservation_discount_monthly"]), step=0.01, help="Discount off the hourly PTU price for a 1-month Azure Reservation (~64% for gpt-5.x).")
         with b3:

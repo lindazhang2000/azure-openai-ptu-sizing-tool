@@ -117,8 +117,8 @@ recommendedPTU    = max( roundedUp( (baselineTPM / modelTpmPerPtu) × (1 + safet
 
 ### Cost assumptions (PTU vs PAYGO comparison)
 
-- **PTU hourly price (USD)** — list price per PTU per hour. The default (~$1/PTU/hr) matches the gpt-5.x rate shown in the Foundry calculator; re-verify per model and region.
-- **Monthly / Yearly reservation discount** — fraction off the hourly price for a 1-month or 1-year Azure Reservation. Defaults (~64% / ~70%) match the Foundry calculator's gpt-5.x tiers. The headline **PTU monthly** uses the 1-month reserved price.
+- **PTU hourly price (USD)** — list price per PTU per hour. This now **varies by Deployment type**: Microsoft introduced differentiated hourly pricing where Global is the lowest, Data Zone slightly higher, and Regional the highest. The field defaults from the selected deployment type (indicative: Global ~$1.00, Data Zone ~$1.10, Regional ~$2.00 per PTU/hr) and stays editable; re-verify per model and region on the Azure pricing page.
+- **Monthly / Yearly reservation discount** — fraction off the hourly price for a 1-month or 1-year Azure Reservation. Defaults (~64% / ~70%) match the Foundry calculator's gpt-5.x tiers. The headline **PTU monthly** uses the 1-month reserved price. Note that **reservation prices do not vary by deployment type** — only the hourly rate differs.
 - **PAYGO input / 1M tokens** and **PAYGO output / 1M tokens** — consumption pricing for uncached input and output tokens.
 - **PAYGO cached input / 1M tokens** — cached prompt tokens are billed at a **discounted rate, not free**, so the comparison does not overstate PAYGO savings.
 - **Hours per month** — billing window (730 ≈ a full month) used for both PTU cost and total request volume.

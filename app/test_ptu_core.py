@@ -2,7 +2,16 @@ import math
 
 import pytest
 
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, calculate, deployment_minimums
+from ptu_core import (
+    DEFAULTS,
+    DEPLOYMENT_PRICING,
+    DEPLOYMENT_TYPES,
+    MODEL_PRESETS,
+    available_deployment_types,
+    calculate,
+    deployment_hourly_price,
+    deployment_minimums,
+)
 
 
 def test_defaults_match_expected_scenario():
@@ -219,5 +228,25 @@ def test_every_preset_lists_at_least_one_deployment_type():
         types = available_deployment_types(preset)
         assert len(types) >= 1, name
         assert all(t in DEPLOYMENT_TYPES for t in types), name
+
+
+def test_hourly_price_is_differentiated_by_deployment_type():
+    # Global is cheapest, Data Zone higher, Regional the most expensive.
+    g = deployment_hourly_price("Global")
+    d = deployment_hourly_price("Data Zone")
+    r = deployment_hourly_price("Regional")
+    assert g < d < r
+    assert DEPLOYMENT_PRICING["Global"] == g
+    # An unknown type falls back to the default hourly price.
+    assert deployment_hourly_price("Nonexistent") == DEFAULTS["ptu_hourly_price"]
+
+
+def test_regional_costs_more_than_global_for_same_workload():
+    # Same PTU count, but Regional's higher hourly price -> higher cost in every tier.
+    g = calculate({**DEFAULTS, "ptu_hourly_price": deployment_hourly_price("Global")})
+    r = calculate({**DEFAULTS, "ptu_hourly_price": deployment_hourly_price("Regional")})
+    assert r["ptu_hourly_monthly"] > g["ptu_hourly_monthly"]
+    assert r["ptu_monthly_reserved"] > g["ptu_monthly_reserved"]
+
 
 

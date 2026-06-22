@@ -35,6 +35,23 @@ DEFAULTS = {
 # See https://learn.microsoft.com/azure/foundry/openai/how-to/provisioned-throughput-sizing
 DEPLOYMENT_TYPES = ["Global", "Data Zone", "Regional"]
 
+# Indicative differentiated hourly price ($/PTU/hr) by deployment type. Microsoft
+# introduced differentiated hourly pricing (Dec 2024): Global is the lowest,
+# Data Zone slightly higher, Regional the highest. Monthly/yearly *reservation*
+# prices do NOT vary by deployment type. These are indicative placeholders —
+# confirm on the Azure pricing page before customer use.
+# https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/
+DEPLOYMENT_PRICING = {
+    "Global": 1.0,
+    "Data Zone": 1.10,
+    "Regional": 2.0,
+}
+
+
+def deployment_hourly_price(deployment_type):
+    """Return the indicative hourly $/PTU price for a deployment type."""
+    return DEPLOYMENT_PRICING.get(deployment_type, DEFAULTS["ptu_hourly_price"])
+
 # Per-model sizing constants from the official PTU sizing guidance
 # (Input TPM per PTU, output-to-input ratio, and the deployment minimum/scale
 # increment for each deployment type). `min_ptu_commit`/`ptu_scale_increment`
