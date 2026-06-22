@@ -109,6 +109,71 @@ def deployment_minimums(preset, deployment_type):
     )
 
 
+# Indicative region availability for provisioned throughput, by deployment type.
+# Global routes across any region where the model is deployed; Data Zone stays
+# within the US or EU data zone; Regional pins to a specific Azure region.
+# These are representative subsets captured from the Microsoft Learn region
+# tables and WILL drift — always confirm against the live "Region availability
+# for Foundry Models sold by Azure (provisioned)" page before customer use.
+# https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability?pivots=provisioned
+
+# Broad pool of regions where Global provisioned OpenAI models are commonly offered.
+_GLOBAL_REGIONS = [
+    "australiaeast", "brazilsouth", "canadacentral", "canadaeast", "centralus",
+    "eastus", "eastus2", "francecentral", "germanywestcentral", "italynorth",
+    "japaneast", "koreacentral", "northcentralus", "norwayeast", "polandcentral",
+    "southcentralus", "southindia", "southeastasia", "spaincentral", "swedencentral",
+    "switzerlandnorth", "uksouth", "westus", "westus3", "westeurope",
+]
+
+# Data Zone provisioned is limited to the US and EU data zones.
+_DATA_ZONE_REGIONS = [
+    "eastus", "eastus2", "northcentralus", "southcentralus", "westus", "westus3",
+    "francecentral", "germanywestcentral", "italynorth", "polandcentral",
+    "spaincentral", "swedencentral", "westeurope",
+]
+
+# Per-model Regional provisioned availability is the most constrained, so keep an
+# indicative per-model list. Models that support Regional but are absent here fall
+# back to a small common set.
+_REGIONAL_REGIONS = {
+    "gpt-5": ["australiaeast", "canadaeast", "eastus", "eastus2", "japaneast", "koreacentral", "southindia", "westus", "westus3"],
+    "gpt-5-mini": ["eastus2", "koreacentral", "southindia", "westus", "westus3"],
+    "gpt-4.1": ["australiaeast", "brazilsouth", "eastus", "eastus2", "japaneast", "koreacentral", "southindia", "swedencentral", "uksouth", "westus", "westus3"],
+    "gpt-4.1-mini": ["australiaeast", "eastus2", "koreacentral", "southindia", "swedencentral", "westus", "westus3"],
+    "gpt-4.1-nano": ["eastus", "eastus2", "swedencentral", "westus3"],
+    "gpt-4o": ["australiaeast", "canadaeast", "eastus", "eastus2", "japaneast", "swedencentral", "uksouth", "westus", "westus3"],
+}
+_REGIONAL_FALLBACK = ["eastus", "eastus2", "westus", "westus3"]
+
+# Indicative Global region lists for models with a narrower rollout than the pool.
+_MODEL_GLOBAL_OVERRIDE = {
+    "gpt-5.2": ["eastus2", "swedencentral", "westus3"],
+    "Llama-3.3-70B": ["eastus2", "swedencentral", "westus3"],
+}
+
+
+def available_regions(model_preset_name, deployment_type):
+    """Return an indicative list of regions where a model + deployment type is offered.
+
+    Returns an empty list when the model does not support the deployment type.
+    Indicative subsets only — confirm against the live Microsoft Learn region tables.
+    """
+    preset = MODEL_PRESETS.get(model_preset_name, {})
+    if deployment_type not in available_deployment_types(preset):
+        return []
+    if deployment_type == "Data Zone":
+        return list(_DATA_ZONE_REGIONS)
+    if deployment_type == "Regional":
+        return list(_REGIONAL_REGIONS.get(model_preset_name, _REGIONAL_FALLBACK))
+    return list(_MODEL_GLOBAL_OVERRIDE.get(model_preset_name, _GLOBAL_REGIONS))
+
+
+def region_supported(model_preset_name, deployment_type, region):
+    """Return True if the region appears in the indicative availability list."""
+    return region in available_regions(model_preset_name, deployment_type)
+
+
 def _round_up_to_increment(value, increment):
     """Round value up to the nearest valid PTU scale increment."""
     inc = max(increment, 1)

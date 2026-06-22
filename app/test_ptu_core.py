@@ -9,9 +9,11 @@ from ptu_core import (
     MODEL_PRESETS,
     SPILLOVER_DEPLOYMENT_TYPES,
     available_deployment_types,
+    available_regions,
     calculate,
     deployment_hourly_price,
     deployment_minimums,
+    region_supported,
     spillover_supported,
 )
 
@@ -280,5 +282,37 @@ def test_spillover_flag_does_not_change_non_spillover_recommendations():
     steady_regional = calculate({**DEFAULTS, "p95_multiplier": 1.8, "spillover_supported": False})
     assert steady_global["architecture"]["label"] == "PTU-first production baseline"
     assert steady_regional["architecture"]["label"] == "PTU-first production baseline"
+
+
+def test_available_regions_empty_for_unsupported_deployment_type():
+    # gpt-5.2 is Global only, so it has no Data Zone or Regional regions.
+    assert available_regions("gpt-5.2", "Data Zone") == []
+    assert available_regions("gpt-5.2", "Regional") == []
+    assert available_regions("gpt-5.2", "Global")  # non-empty
+
+
+def test_data_zone_regions_are_us_and_eu_only():
+    # Data Zone provisioned stays in US/EU zones — no APAC regions like australiaeast.
+    regions = available_regions("gpt-4.1", "Data Zone")
+    assert "eastus" in regions
+    assert "westeurope" in regions
+    assert "australiaeast" not in regions
+    assert "japaneast" not in regions
+
+
+def test_region_supported_checks_indicative_list():
+    assert region_supported("gpt-4.1", "Data Zone", "eastus") is True
+    assert region_supported("gpt-4.1", "Data Zone", "australiaeast") is False
+    assert region_supported("gpt-4.1", "Global", "eastus2") is True
+    # Unsupported deployment type -> no regions -> always False.
+    assert region_supported("gpt-5.2", "Regional", "eastus2") is False
+
+
+def test_regional_regions_are_model_specific_with_fallback():
+    # Known model uses its curated list; an unmapped (Custom) model uses the fallback.
+    assert "eastus2" in available_regions("gpt-4.1", "Regional")
+    fallback = available_regions("Custom", "Regional")
+    assert fallback == ["eastus", "eastus2", "westus", "westus3"]
+
 
 

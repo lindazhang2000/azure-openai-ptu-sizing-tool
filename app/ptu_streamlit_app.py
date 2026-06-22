@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, calculate, deployment_hourly_price, deployment_minimums, spillover_supported
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, region_supported, spillover_supported
 
 st.set_page_config(page_title="PTU Sizing Demo", page_icon="⚡", layout="wide")
 
@@ -40,6 +40,18 @@ with left:
         st.caption(f"✅ {deployment_type} provisioned supports automatic spillover to a matching Standard deployment (preview).")
     else:
         st.caption(f"⚠️ {deployment_type} provisioned does not support automatic spillover — use Global or Data Zone for that, or route overflow manually.")
+
+    region_options = available_regions(selected_model, deployment_type)
+    region = st.selectbox(
+        "Region (indicative)",
+        region_options if region_options else ["(none listed)"],
+        index=0,
+        help="Indicative subset of Azure regions where this model + deployment type is offered for provisioned throughput. Global routes across regions; Data Zone stays within the US/EU zone; Regional pins to a single region. Availability changes frequently — always confirm against the live Microsoft Learn region tables.",
+    )
+    if region_options:
+        st.caption(f"{len(region_options)} indicative region(s) for {selected_model} · {deployment_type}. Verify against the live region tables before deployment.")
+    else:
+        st.caption(f"No indicative regions listed for {selected_model} · {deployment_type}. Confirm availability in the Microsoft Learn region tables.")
 
     foundry_mode = st.checkbox(
         "Match Foundry calculator (size for peak, no buffer)",
