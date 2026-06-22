@@ -1,3 +1,4 @@
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -166,7 +167,17 @@ chart_df = pd.DataFrame([
     {"Scenario": "Baseline PTU", "PTUs": calc["recommended_ptu"]},
     {"Scenario": "Peak ref PTU", "PTUs": calc["peak_reference_ptu"]},
 ])
-st.bar_chart(chart_df.set_index("Scenario"))
+ptu_axis_max = max(calc["recommended_ptu"], calc["peak_reference_ptu"], 1) * 1.15
+ptu_chart = (
+    alt.Chart(chart_df)
+    .mark_bar()
+    .encode(
+        x=alt.X("Scenario:N", sort=["Baseline PTU", "Peak ref PTU"], title=None),
+        y=alt.Y("PTUs:Q", title="PTUs", stack=None, scale=alt.Scale(domain=[0, ptu_axis_max])),
+        tooltip=["Scenario", "PTUs"],
+    )
+)
+st.altair_chart(ptu_chart, use_container_width=True)
 
 summary_df = pd.DataFrame([
     ["Average input-equivalent TPM", calc["avg_tpm"]],
