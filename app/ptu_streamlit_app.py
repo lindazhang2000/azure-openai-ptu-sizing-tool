@@ -21,10 +21,10 @@ with left:
     st.subheader("Workload inputs")
     c1, c2, c3 = st.columns(3)
     with c1:
-        avg_rpm = st.number_input("Average RPM", min_value=0.0, value=DEFAULTS["avg_rpm"], step=1.0)
-        avg_input_tokens = st.number_input("Average input tokens / request", min_value=0.0, value=DEFAULTS["avg_input_tokens"], step=1.0)
+        avg_rpm = st.number_input("Average RPM", min_value=0.0, value=float(DEFAULTS["avg_rpm"]), step=1.0)
+        avg_input_tokens = st.number_input("Average input tokens / request", min_value=0.0, value=float(DEFAULTS["avg_input_tokens"]), step=1.0)
     with c2:
-        avg_output_tokens = st.number_input("Average output tokens / request", min_value=0.0, value=DEFAULTS["avg_output_tokens"], step=1.0)
+        avg_output_tokens = st.number_input("Average output tokens / request", min_value=0.0, value=float(DEFAULTS["avg_output_tokens"]), step=1.0)
         p95_multiplier = st.slider("P95 load multiplier", min_value=1.0, max_value=5.0, value=float(DEFAULTS["p95_multiplier"]), step=0.1)
     with c3:
         cache_rate = st.slider("Prompt cache rate", min_value=0.0, max_value=0.9, value=float(DEFAULTS["cache_rate"]), step=0.05)
@@ -33,13 +33,13 @@ with left:
     with st.expander("Advanced assumptions", expanded=True):
         a1, a2, a3, a4 = st.columns(4)
         with a1:
-            model_tpm_per_ptu = st.number_input("Model TPM per PTU", min_value=1.0, value=DEFAULTS["model_tpm_per_ptu"], step=1.0)
+            model_tpm_per_ptu = st.number_input("Model TPM per PTU", min_value=1.0, value=float(DEFAULTS["model_tpm_per_ptu"]), step=1.0)
         with a2:
             output_weight = st.number_input("Output weighting", min_value=0.0, value=float(DEFAULTS["output_weight"]), step=0.1)
         with a3:
             safety_buffer = st.number_input("Safety buffer", min_value=0.0, value=float(DEFAULTS["safety_buffer"]), step=0.01, format="%.2f")
         with a4:
-            min_ptu_commit = st.number_input("Minimum PTU commit", min_value=0.0, value=DEFAULTS["min_ptu_commit"], step=1.0)
+            min_ptu_commit = st.number_input("Minimum PTU commit", min_value=0.0, value=float(DEFAULTS["min_ptu_commit"]), step=1.0)
 
     with st.expander("Cost assumptions", expanded=True):
         b1, b2, b3, b4 = st.columns(4)
@@ -50,7 +50,7 @@ with left:
         with b3:
             paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, value=float(DEFAULTS["paygo_output_per_1m"]), step=0.01)
         with b4:
-            hours_per_month = st.number_input("Hours per month", min_value=1.0, value=DEFAULTS["hours_per_month"], step=1.0)
+            hours_per_month = st.number_input("Hours per month", min_value=1.0, value=float(DEFAULTS["hours_per_month"]), step=1.0)
 
 values = {
     "avg_rpm": avg_rpm,
