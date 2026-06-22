@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from ptu_core import DEFAULTS, MODEL_PRESETS, calculate
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, calculate, deployment_minimums
 
 st.set_page_config(page_title="PTU Sizing Demo", page_icon="⚡", layout="wide")
 
@@ -27,6 +27,15 @@ with left:
         help="Fills model throughput, output weighting, minimum commit, and scale increment from the official PTU sizing tables. Choose Custom to edit them freely.",
     )
     preset = MODEL_PRESETS.get(selected_model, {})
+
+    deployment_options = available_deployment_types(preset)
+    deployment_type = st.selectbox(
+        "Deployment type",
+        deployment_options,
+        index=0,
+        help="Global and Data Zone provisioned share the lower minimum (e.g. 15 PTUs) and a 5-PTU scale increment. Regional provisioned uses larger model-specific minimums (e.g. 50 PTUs, 50 increment). Only the deployment types each model supports are listed; availability also varies by region — see the Microsoft Learn references.",
+    )
+    eff_min_ptu, eff_increment = deployment_minimums(preset, deployment_type)
 
     foundry_mode = st.checkbox(
         "Match Foundry calculator (size for peak, no buffer)",
@@ -55,9 +64,9 @@ with left:
         with a3:
             safety_buffer = st.number_input("Safety buffer", min_value=0.0, value=0.0 if foundry_mode else float(DEFAULTS["safety_buffer"]), step=0.01, format="%.2f", disabled=foundry_mode)
         with a4:
-            min_ptu_commit = st.number_input("Minimum PTU commit", min_value=0.0, value=float(preset.get("min_ptu_commit", DEFAULTS["min_ptu_commit"])), step=1.0, disabled=bool(preset))
+            min_ptu_commit = st.number_input("Minimum PTU commit", min_value=0.0, value=float(eff_min_ptu), step=1.0, disabled=bool(preset))
         with a5:
-            ptu_scale_increment = st.number_input("PTU scale increment", min_value=1.0, value=float(preset.get("ptu_scale_increment", DEFAULTS["ptu_scale_increment"])), step=1.0, disabled=bool(preset))
+            ptu_scale_increment = st.number_input("PTU scale increment", min_value=1.0, value=float(eff_increment), step=1.0, disabled=bool(preset))
 
     with st.expander("Cost assumptions", expanded=True):
         b1, b2, b3, b4 = st.columns(4)

@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from ptu_core import DEFAULTS, MODEL_PRESETS, calculate
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, calculate, deployment_minimums
 
 
 def test_defaults_match_expected_scenario():
@@ -155,3 +155,69 @@ def test_small_baseline_below_minimum_recommends_paygo():
     r = calculate(vals)
     assert r["raw_baseline_ptu"] < DEFAULTS["min_ptu_commit"]
     assert r["architecture"]["label"] == "PAYGO or smaller PTU pilot"
+
+
+def test_deployment_types_available():
+    assert DEPLOYMENT_TYPES == ["Global", "Data Zone", "Regional"]
+
+
+@pytest.mark.parametrize("deployment_type", ["Global", "Data Zone"])
+def test_global_and_data_zone_use_lower_minimums(deployment_type):
+    # Global and Data Zone share the model's lower minimum/increment (e.g. 15/5).
+    preset = MODEL_PRESETS["gpt-4.1"]
+    min_ptu, increment = deployment_minimums(preset, deployment_type)
+    assert min_ptu == 15
+    assert increment == 5
+
+
+def test_regional_uses_larger_model_specific_minimums():
+    # gpt-4.1 Regional provisioned minimum is 50 PTUs in increments of 50.
+    min_ptu, increment = deployment_minimums(MODEL_PRESETS["gpt-4.1"], "Regional")
+    assert min_ptu == 50
+    assert increment == 50
+    # gpt-5-mini Regional minimum is 25/25.
+    mini_min, mini_inc = deployment_minimums(MODEL_PRESETS["gpt-5-mini"], "Regional")
+    assert mini_min == 25
+    assert mini_inc == 25
+
+
+def test_custom_preset_falls_back_to_defaults():
+    # An empty (Custom) preset keeps the default minimums for every type.
+    for dtype in DEPLOYMENT_TYPES:
+        min_ptu, increment = deployment_minimums({}, dtype)
+        assert min_ptu == DEFAULTS["min_ptu_commit"]
+        assert increment == DEFAULTS["ptu_scale_increment"]
+
+
+def test_regional_minimum_raises_sizing_floor():
+    # A tiny workload on gpt-4.1: Global floors at 15, Regional floors at 50.
+    base = {**DEFAULTS, **MODEL_PRESETS["gpt-4.1"], "avg_rpm": 1}
+    g_min, g_inc = deployment_minimums(MODEL_PRESETS["gpt-4.1"], "Global")
+    r_min, r_inc = deployment_minimums(MODEL_PRESETS["gpt-4.1"], "Regional")
+    g = calculate({**base, "min_ptu_commit": g_min, "ptu_scale_increment": g_inc})
+    r = calculate({**base, "min_ptu_commit": r_min, "ptu_scale_increment": r_inc})
+    assert g["recommended_ptu"] == 15
+    assert r["recommended_ptu"] == 50
+
+
+def test_available_deployment_types_restrict_per_model():
+    # gpt-5.2 is Global only; gpt-5.1 adds Data Zone; gpt-4.1 supports all three.
+    assert available_deployment_types(MODEL_PRESETS["gpt-5.2"]) == ["Global"]
+    assert available_deployment_types(MODEL_PRESETS["gpt-5.1"]) == ["Global", "Data Zone"]
+    assert available_deployment_types(MODEL_PRESETS["gpt-4.1"]) == ["Global", "Data Zone", "Regional"]
+    # Llama is Global only.
+    assert available_deployment_types(MODEL_PRESETS["Llama-3.3-70B"]) == ["Global"]
+
+
+def test_available_deployment_types_default_to_all_for_custom():
+    # A Custom/empty preset offers every deployment type.
+    assert available_deployment_types({}) == DEPLOYMENT_TYPES
+
+
+def test_every_preset_lists_at_least_one_deployment_type():
+    for name, preset in MODEL_PRESETS.items():
+        types = available_deployment_types(preset)
+        assert len(types) >= 1, name
+        assert all(t in DEPLOYMENT_TYPES for t in types), name
+
+

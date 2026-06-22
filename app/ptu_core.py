@@ -30,16 +30,54 @@ DEFAULTS = {
     "hours_per_month": 730,
 }
 
+# Provisioned deployment types. Global and Data Zone share the same (lower)
+# minimums and scale increments; Regional uses larger model-specific minimums.
+# See https://learn.microsoft.com/azure/foundry/openai/how-to/provisioned-throughput-sizing
+DEPLOYMENT_TYPES = ["Global", "Data Zone", "Regional"]
+
 # Per-model sizing constants from the official PTU sizing guidance
-# (Input TPM per PTU, output-to-input ratio, model minimum, and scale increment).
+# (Input TPM per PTU, output-to-input ratio, and the deployment minimum/scale
+# increment for each deployment type). `min_ptu_commit`/`ptu_scale_increment`
+# are the Global & Data Zone values; `regional_*` are the Regional values.
+# `available_deployments` lists the deployment types each model supports.
 # Values are indicative defaults — confirm against current Microsoft Learn tables.
 MODEL_PRESETS = {
-    "gpt-4.1": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5},
-    "gpt-5": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5},
-    "gpt-5.1": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5},
-    "gpt-4o": {"model_tpm_per_ptu": 2500, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5},
-    "Llama-3.3-70B": {"model_tpm_per_ptu": 8450, "output_weight": 4.0, "min_ptu_commit": 100, "ptu_scale_increment": 100},
+    "gpt-5.2": {"model_tpm_per_ptu": 3400, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global"]},
+    "gpt-5.1": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone"]},
+    "gpt-5": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"]},
+    "gpt-5-mini": {"model_tpm_per_ptu": 23750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"]},
+    "gpt-4.1": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"]},
+    "gpt-4.1-mini": {"model_tpm_per_ptu": 14900, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"]},
+    "gpt-4.1-nano": {"model_tpm_per_ptu": 59400, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"]},
+    "gpt-4o": {"model_tpm_per_ptu": 2500, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"]},
+    "Llama-3.3-70B": {"model_tpm_per_ptu": 8450, "output_weight": 4.0, "min_ptu_commit": 100, "ptu_scale_increment": 100, "regional_min_ptu_commit": 100, "regional_ptu_scale_increment": 100, "available_deployments": ["Global"]},
 }
+
+
+def available_deployment_types(preset):
+    """Return the deployment types a model preset supports.
+
+    A Custom/empty preset supports all deployment types.
+    """
+    return preset.get("available_deployments", list(DEPLOYMENT_TYPES))
+
+
+def deployment_minimums(preset, deployment_type):
+    """Return (min_ptu_commit, ptu_scale_increment) for a model preset and deployment type.
+
+    Global and Data Zone share the lower minimums; Regional uses the larger
+    model-specific values. Falls back to the Global/Data Zone values (or
+    DEFAULTS for a Custom/empty preset) when regional values are absent.
+    """
+    if deployment_type == "Regional":
+        return (
+            preset.get("regional_min_ptu_commit", preset.get("min_ptu_commit", DEFAULTS["min_ptu_commit"])),
+            preset.get("regional_ptu_scale_increment", preset.get("ptu_scale_increment", DEFAULTS["ptu_scale_increment"])),
+        )
+    return (
+        preset.get("min_ptu_commit", DEFAULTS["min_ptu_commit"]),
+        preset.get("ptu_scale_increment", DEFAULTS["ptu_scale_increment"]),
+    )
 
 
 def _round_up_to_increment(value, increment):
