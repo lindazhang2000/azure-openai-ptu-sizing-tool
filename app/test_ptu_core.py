@@ -19,8 +19,8 @@ def test_defaults_match_expected_scenario():
     # peak: (436320/3000)*1.15 = 167.256 -> ceil 168
     assert r["peak_reference_ptu"] == 168
 
-    # burst_ratio = p95/baseline = 1 / baseline_load_factor
-    assert r["burst_ratio"] == pytest.approx(1 / 0.70)
+    # burst_ratio = p95/avg = p95_multiplier (peak-to-mean)
+    assert r["burst_ratio"] == pytest.approx(1.8)
 
     # Cost
     assert r["ptu_monthly"] == pytest.approx(118 * 15.0 * 730)
@@ -50,16 +50,16 @@ def test_model_tpm_per_ptu_zero_does_not_divide_by_zero():
 
 
 @pytest.mark.parametrize(
-    "load,expected_label",
+    "p95,expected_label",
     [
-        (1.0, "PTU-first production baseline"),   # burst_ratio = 1.0  (<2)
-        (0.40, "PTU + Standard spillover"),       # burst_ratio = 2.5  (2..4)
-        (0.20, "PAYGO or smaller PTU pilot"),     # burst_ratio = 5.0  (>=4)
+        (1.8, "PTU-first production baseline"),   # burst_ratio = 1.8  (<2)
+        (3.0, "PTU + Standard spillover"),        # burst_ratio = 3.0  (2..4)
+        (4.0, "PAYGO or smaller PTU pilot"),      # burst_ratio = 4.0  (>=4)
     ],
 )
-def test_architecture_recommendation_by_burstiness(load, expected_label):
-    # burst_ratio depends only on baseline_load_factor (= 1 / load)
-    vals = {**DEFAULTS, "baseline_load_factor": load}
+def test_architecture_recommendation_by_burstiness(p95, expected_label):
+    # burst_ratio is peak-to-mean (= p95_multiplier)
+    vals = {**DEFAULTS, "p95_multiplier": p95}
     r = calculate(vals)
-    assert r["burst_ratio"] == pytest.approx(1 / load)
+    assert r["burst_ratio"] == pytest.approx(p95)
     assert r["architecture"]["label"] == expected_label

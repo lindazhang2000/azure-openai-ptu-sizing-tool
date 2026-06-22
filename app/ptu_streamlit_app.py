@@ -78,7 +78,7 @@ with right:
 
     st.metric("Baseline TPM", f'{calc["baseline_tpm"]:,.0f}')
     st.metric("P95 TPM", f'{calc["p95_tpm"]:,.0f}')
-    st.metric("Burst ratio (P95 / baseline)", f'{calc["burst_ratio"]:,.2f}x')
+    st.metric("Burst ratio (P95 / average)", f'{calc["burst_ratio"]:,.2f}x')
 
     st.markdown(f"### {calc['architecture']['badge']} {calc['architecture']['label']}")
     st.write(calc['architecture']['summary'])

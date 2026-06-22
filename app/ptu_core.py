@@ -39,7 +39,7 @@ def calculate(values):
         max(math.ceil(values["min_ptu_commit"]), 0)
     )
     peak_reference_ptu = math.ceil((p95_tpm / max(values["model_tpm_per_ptu"], 1)) * (1 + values["safety_buffer"]))
-    burst_ratio = (p95_tpm / baseline_tpm) if baseline_tpm > 0 else 0
+    burst_ratio = (p95_tpm / avg_tpm) if avg_tpm > 0 else 0
 
     monthly_requests = values["avg_rpm"] * 60 * values["hours_per_month"]
     input_tokens_monthly = monthly_requests * values["avg_input_tokens"] * (1 - values["cache_rate"])
