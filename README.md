@@ -73,6 +73,18 @@ What you should see:
 
 To flip the recommendation, keep everything else fixed and move just the **P95 multiplier**: below 2 = PTU-first, 2–4 = spillover, 4+ = PAYGO. The recommendation also turns to *PAYGO / pilot* whenever the steady baseline needs fewer PTUs than the model minimum (e.g. set **Average RPM** to `1`), since a dedicated PTU deployment would sit idle.
 
+### Regional vs. Global: how deployment type changes the cost story
+
+Take **one** steady workload and change **only the Deployment type** to see why Global is usually the default and Regional is a data-residency premium. Use `gpt-4.1`, Average RPM `60`, 1800 input / 650 output tokens, P95 `1.8`, cache `0.20`, and leave everything else at defaults. The same workload needs ~120 PTUs of throughput, but the deployment type changes the minimum commit, the hourly price, and therefore the verdict:
+
+| Deployment type | Min / increment | Recommended PTUs | Hourly $/PTU | PTU monthly (1-mo reserved) | PAYGO monthly | Cheaper option |
+| --- | --- | --- | --- | --- | --- | --- |
+| Global | 15 / 5 | 120 | ~$1.00 | ~$31,500 | ~$46,900 | **PTU** (~33% less) |
+| Data Zone | 15 / 5 | 120 | ~$1.10 | ~$34,700 | ~$46,900 | **PTU** (~10% more than Global) |
+| Regional | 50 / 50 | 150 | ~$2.00 | ~$78,800 | ~$46,900 | **PAYGO** |
+
+Two things flip the economics on Regional: the larger **minimum / increment** rounds the 120-PTU need up to **150 PTUs**, and the **hourly price doubles**. Together that pushes the committed PTU cost *above* PAYGO for the very same traffic — so Regional only makes sense when **data residency** mandates it, and even then a smaller PTU pilot plus PAYGO overflow is often the better starting point (and recall Regional has **no automatic spillover**). Global stays the cheapest with the broadest region coverage; Data Zone is the modest premium when you need EU/US data-zone routing.
+
 ## Understanding the inputs
 
 ### Model preset
