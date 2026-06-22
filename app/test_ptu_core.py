@@ -315,4 +315,28 @@ def test_regional_regions_are_model_specific_with_fallback():
     assert fallback == ["eastus", "eastus2", "westus", "westus3"]
 
 
+def test_openai_presets_carry_confirmed_global_paygo_rates():
+    # Confirmed Global Standard $/1M rates from the Azure OpenAI pricing page.
+    assert MODEL_PRESETS["gpt-4.1"]["paygo_input_per_1m"] == 2.0
+    assert MODEL_PRESETS["gpt-4.1"]["paygo_output_per_1m"] == 8.0
+    assert MODEL_PRESETS["gpt-4o"]["paygo_output_per_1m"] == 10.0
+    assert MODEL_PRESETS["gpt-5.1"]["paygo_output_per_1m"] == 10.0
+
+
+def test_per_model_paygo_changes_paygo_monthly():
+    # A cheaper model (gpt-4.1-nano) must yield a lower PAYGO cost than gpt-4o
+    # for the same workload, because per-model token rates flow into calculate().
+    workload = {"avg_rpm": 100, "avg_input_tokens": 1500, "avg_output_tokens": 500, "p95_multiplier": 1.5, "cache_rate": 0.2}
+    nano = calculate({**DEFAULTS, **MODEL_PRESETS["gpt-4.1-nano"], **workload})
+    gpt4o = calculate({**DEFAULTS, **MODEL_PRESETS["gpt-4o"], **workload})
+    assert nano["paygo_monthly"] < gpt4o["paygo_monthly"]
+
+
+def test_llama_preset_has_no_openai_paygo_override():
+    # Llama-3.3-70B is a Foundry MaaS model; it carries no OpenAI PAYGO rate and
+    # falls back to the editable DEFAULTS.
+    assert "paygo_input_per_1m" not in MODEL_PRESETS["Llama-3.3-70B"]
+
+
+
 

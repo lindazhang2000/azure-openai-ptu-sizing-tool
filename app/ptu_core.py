@@ -24,9 +24,12 @@ DEFAULTS = {
     "ptu_hourly_price": 1.0,
     "reservation_discount_monthly": 0.64,
     "reservation_discount_yearly": 0.70,
-    "paygo_input_per_1m": 5.0,
-    "paygo_cached_per_1m": 2.5,
-    "paygo_output_per_1m": 15.0,
+    # Fallback PAYGO ($/1M tokens) for Custom / non-OpenAI presets. Each Azure
+    # OpenAI preset below carries its own confirmed Global Standard rates; this
+    # generic fallback is editable in the app/notebook. Confirm per model/region.
+    "paygo_input_per_1m": 2.0,
+    "paygo_cached_per_1m": 0.5,
+    "paygo_output_per_1m": 8.0,
     "hours_per_month": 730,
 }
 
@@ -35,11 +38,14 @@ DEFAULTS = {
 # See https://learn.microsoft.com/azure/foundry/openai/how-to/provisioned-throughput-sizing
 DEPLOYMENT_TYPES = ["Global", "Data Zone", "Regional"]
 
-# Indicative differentiated hourly price ($/PTU/hr) by deployment type. Microsoft
-# introduced differentiated hourly pricing (Dec 2024): Global is the lowest,
-# Data Zone slightly higher, Regional the highest. Monthly/yearly *reservation*
-# prices do NOT vary by deployment type. These are indicative placeholders —
-# confirm on the Azure pricing page before customer use.
+# Differentiated hourly price ($/PTU/hr) by deployment type. Microsoft introduced
+# differentiated hourly pricing (Dec 2024): Global is the lowest, Data Zone
+# slightly higher, Regional the highest. Monthly/yearly *reservation* prices do
+# NOT vary by deployment type. Values confirmed against the Azure OpenAI pricing
+# page (Provisioned table, June 2026): Global $1.00, Data Zone $1.10, Regional
+# $2.00 per PTU/hr; 1-month reservation $260/PTU/mo (=64% off the $730 hourly-
+# equivalent), 1-year $2,652/PTU/yr (=$221/mo, ~70% off) — matching the
+# reservation_discount_monthly/yearly defaults above. Re-verify before quoting.
 # https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/
 DEPLOYMENT_PRICING = {
     "Global": 1.0,
@@ -69,16 +75,20 @@ def spillover_supported(deployment_type):
 # increment for each deployment type). `min_ptu_commit`/`ptu_scale_increment`
 # are the Global & Data Zone values; `regional_*` are the Regional values.
 # `available_deployments` lists the deployment types each model supports.
-# Values are indicative defaults — confirm against current Microsoft Learn tables.
+# `paygo_*_per_1m` are the model's confirmed **Global Standard** PAYGO rates
+# ($/1M tokens) from the Azure OpenAI pricing page (June 2026) — Data Zone /
+# Regional standard are ~10% higher. Llama-3.3-70B is priced as a Foundry MaaS
+# model (separate pricing page), so it has no OpenAI PAYGO rate here and falls
+# back to the editable DEFAULTS. Re-verify all values against current docs.
 MODEL_PRESETS = {
-    "gpt-5.2": {"model_tpm_per_ptu": 3400, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global"]},
-    "gpt-5.1": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone"]},
-    "gpt-5": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"]},
-    "gpt-5-mini": {"model_tpm_per_ptu": 23750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"]},
-    "gpt-4.1": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"]},
-    "gpt-4.1-mini": {"model_tpm_per_ptu": 14900, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"]},
-    "gpt-4.1-nano": {"model_tpm_per_ptu": 59400, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"]},
-    "gpt-4o": {"model_tpm_per_ptu": 2500, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"]},
+    "gpt-5.2": {"model_tpm_per_ptu": 3400, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global"], "paygo_input_per_1m": 1.75, "paygo_cached_per_1m": 0.18, "paygo_output_per_1m": 14.0},
+    "gpt-5.1": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0},
+    "gpt-5": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0},
+    "gpt-5-mini": {"model_tpm_per_ptu": 23750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.25, "paygo_cached_per_1m": 0.03, "paygo_output_per_1m": 2.0},
+    "gpt-4.1": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 2.0, "paygo_cached_per_1m": 0.5, "paygo_output_per_1m": 8.0},
+    "gpt-4.1-mini": {"model_tpm_per_ptu": 14900, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.4, "paygo_cached_per_1m": 0.1, "paygo_output_per_1m": 1.6},
+    "gpt-4.1-nano": {"model_tpm_per_ptu": 59400, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.1, "paygo_cached_per_1m": 0.03, "paygo_output_per_1m": 0.4},
+    "gpt-4o": {"model_tpm_per_ptu": 2500, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 2.5, "paygo_cached_per_1m": 1.25, "paygo_output_per_1m": 10.0},
     "Llama-3.3-70B": {"model_tpm_per_ptu": 8450, "output_weight": 4.0, "min_ptu_commit": 100, "ptu_scale_increment": 100, "regional_min_ptu_commit": 100, "regional_ptu_scale_increment": 100, "available_deployments": ["Global"]},
 }
 
