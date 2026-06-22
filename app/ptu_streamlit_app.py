@@ -119,7 +119,7 @@ st.subheader("Monthly cost comparison")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("PTU monthly (1-mo reserved)", f'${calc["ptu_monthly"]:,.0f}', help=f'Hourly list: ${calc["ptu_hourly_monthly"]:,.0f}/mo before any reservation discount.')
 m2.metric("PAYGO monthly", f'${calc["paygo_monthly"]:,.0f}')
-m3.metric("PTU + spillover", f'${calc["blended_monthly"]:,.0f}', help=f'Reserved PTU baseline plus PAYGO for the ~{calc["spill_fraction"]*100:,.1f}% of monthly demand that exceeds provisioned capacity, given the peak-minutes duty cycle.')
+m3.metric("PTU + spillover", f'${calc["blended_monthly"]:,.0f}', delta=f'{calc["spill_fraction"]*100:,.1f}% on Standard', delta_color="off", help=f'Reserved PTU baseline plus PAYGO for the ~{calc["spill_fraction"]*100:,.1f}% of monthly demand that exceeds provisioned capacity, given the peak-minutes duty cycle.')
 delta_label = "PTU saves" if calc["savings_delta"] >= 0 else "PAYGO saves"
 m4.metric(delta_label, f'${abs(calc["savings_delta"]):,.0f}')
 
