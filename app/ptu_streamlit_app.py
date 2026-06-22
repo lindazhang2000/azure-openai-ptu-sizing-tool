@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from ptu_core import DEFAULTS, calculate
+from ptu_core import DEFAULTS, MODEL_PRESETS, calculate
 
 st.set_page_config(page_title="PTU Sizing Demo", page_icon="⚡", layout="wide")
 
@@ -19,6 +19,15 @@ left, right = st.columns([1.25, 0.75], gap="large")
 
 with left:
     st.subheader("Workload inputs")
+    preset_options = ["Custom"] + list(MODEL_PRESETS.keys())
+    selected_model = st.selectbox(
+        "Model preset",
+        preset_options,
+        index=preset_options.index("gpt-4.1"),
+        help="Fills model throughput, output weighting, minimum commit, and scale increment from the official PTU sizing tables. Choose Custom to edit them freely.",
+    )
+    preset = MODEL_PRESETS.get(selected_model, {})
+
     c1, c2, c3 = st.columns(3)
     with c1:
         avg_rpm = st.number_input("Average RPM", min_value=0.0, value=float(DEFAULTS["avg_rpm"]), step=1.0)
@@ -31,25 +40,32 @@ with left:
         baseline_load_factor = st.slider("Baseline load factor", min_value=0.4, max_value=1.0, value=float(DEFAULTS["baseline_load_factor"]), step=0.05)
 
     with st.expander("Advanced assumptions", expanded=True):
-        a1, a2, a3, a4 = st.columns(4)
+        a1, a2, a3, a4, a5 = st.columns(5)
         with a1:
-            model_tpm_per_ptu = st.number_input("Model TPM per PTU", min_value=1.0, value=float(DEFAULTS["model_tpm_per_ptu"]), step=1.0)
+            model_tpm_per_ptu = st.number_input("Model TPM per PTU", min_value=1.0, value=float(preset.get("model_tpm_per_ptu", DEFAULTS["model_tpm_per_ptu"])), step=1.0, disabled=bool(preset))
         with a2:
-            output_weight = st.number_input("Output weighting", min_value=0.0, value=float(DEFAULTS["output_weight"]), step=0.1)
+            output_weight = st.number_input("Output weighting", min_value=0.0, value=float(preset.get("output_weight", DEFAULTS["output_weight"])), step=0.1, disabled=bool(preset))
         with a3:
             safety_buffer = st.number_input("Safety buffer", min_value=0.0, value=float(DEFAULTS["safety_buffer"]), step=0.01, format="%.2f")
         with a4:
-            min_ptu_commit = st.number_input("Minimum PTU commit", min_value=0.0, value=float(DEFAULTS["min_ptu_commit"]), step=1.0)
+            min_ptu_commit = st.number_input("Minimum PTU commit", min_value=0.0, value=float(preset.get("min_ptu_commit", DEFAULTS["min_ptu_commit"])), step=1.0, disabled=bool(preset))
+        with a5:
+            ptu_scale_increment = st.number_input("PTU scale increment", min_value=1.0, value=float(preset.get("ptu_scale_increment", DEFAULTS["ptu_scale_increment"])), step=1.0, disabled=bool(preset))
 
     with st.expander("Cost assumptions", expanded=True):
         b1, b2, b3, b4 = st.columns(4)
         with b1:
             ptu_hourly_price = st.number_input("PTU hourly price (USD)", min_value=0.0, value=float(DEFAULTS["ptu_hourly_price"]), step=0.01)
         with b2:
-            paygo_input_per_1m = st.number_input("PAYGO input / 1M tokens (USD)", min_value=0.0, value=float(DEFAULTS["paygo_input_per_1m"]), step=0.01)
+            reservation_discount = st.slider("Reservation discount", min_value=0.0, max_value=0.7, value=float(DEFAULTS["reservation_discount"]), step=0.05, help="Discount off the hourly PTU price for a 1-month or 1-year Azure Reservation. 0 = pure hourly.")
         with b3:
-            paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, value=float(DEFAULTS["paygo_output_per_1m"]), step=0.01)
+            paygo_input_per_1m = st.number_input("PAYGO input / 1M tokens (USD)", min_value=0.0, value=float(DEFAULTS["paygo_input_per_1m"]), step=0.01)
         with b4:
+            paygo_cached_per_1m = st.number_input("PAYGO cached input / 1M (USD)", min_value=0.0, value=float(DEFAULTS["paygo_cached_per_1m"]), step=0.01, help="Cached prompt tokens are billed at a discounted rate, not free.")
+        b5, b6 = st.columns(2)
+        with b5:
+            paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, value=float(DEFAULTS["paygo_output_per_1m"]), step=0.01)
+        with b6:
             hours_per_month = st.number_input("Hours per month", min_value=1.0, value=float(DEFAULTS["hours_per_month"]), step=1.0)
 
 values = {
@@ -63,8 +79,11 @@ values = {
     "baseline_load_factor": baseline_load_factor,
     "safety_buffer": safety_buffer,
     "min_ptu_commit": min_ptu_commit,
+    "ptu_scale_increment": ptu_scale_increment,
     "ptu_hourly_price": ptu_hourly_price,
+    "reservation_discount": reservation_discount,
     "paygo_input_per_1m": paygo_input_per_1m,
+    "paygo_cached_per_1m": paygo_cached_per_1m,
     "paygo_output_per_1m": paygo_output_per_1m,
     "hours_per_month": hours_per_month,
 }
@@ -86,11 +105,13 @@ with right:
     st.info(calc['reservation_note'])
 
 st.subheader("Monthly cost comparison")
-m1, m2, m3 = st.columns(3)
-m1.metric("PTU monthly", f'${calc["ptu_monthly"]:,.0f}')
+m1, m2, m3, m4 = st.columns(4)
+ptu_label = "PTU monthly (reserved)" if reservation_discount > 0 else "PTU monthly (hourly)"
+m1.metric(ptu_label, f'${calc["ptu_monthly"]:,.0f}', help=f'Hourly list: ${calc["ptu_hourly_monthly"]:,.0f}/mo before any reservation discount.')
 m2.metric("PAYGO monthly", f'${calc["paygo_monthly"]:,.0f}')
+m3.metric("PTU + spillover", f'${calc["blended_monthly"]:,.0f}', help=f'Reserved PTU baseline plus PAYGO for the ~{calc["spill_fraction"]*100:,.0f}% of peak demand above provisioned capacity.')
 delta_label = "PTU saves" if calc["savings_delta"] >= 0 else "PAYGO saves"
-m3.metric(delta_label, f'${abs(calc["savings_delta"]):,.0f}')
+m4.metric(delta_label, f'${abs(calc["savings_delta"]):,.0f}')
 
 chart_df = pd.DataFrame([
     {"Scenario": "Baseline PTU", "PTUs": calc["recommended_ptu"]},

@@ -67,20 +67,24 @@ Type these into the **Workload inputs**; leave the Advanced and Cost assumptions
 
 What you should see:
 
-- **A** → 🔵 *PTU-first production baseline* (burst 1.50x), ~30 recommended PTUs.
+- **A** → 🔵 *PTU-first production baseline* (burst 1.50x), recommended PTUs rounded up to the model scale increment (multiples of 5 for OpenAI models).
 - **B** → 🟢 *PTU + Standard spillover* (burst 2.80x), several hundred PTUs, PTU far cheaper than PAYGO.
-- **C** → 🟠 *PAYGO or smaller PTU pilot* (burst 4.50x), small PTU count near the 15 minimum.
+- **C** → 🟠 *PAYGO or smaller PTU pilot* (burst 4.50x), small PTU count near the minimum.
 
-To flip the recommendation, keep everything else fixed and move just the **P95 multiplier**: below 2 = PTU-first, 2–4 = spillover, 4+ = PAYGO. To test the minimum-commit floor, set **Average RPM** to `1` — recommended PTUs should clamp to 15.
+To flip the recommendation, keep everything else fixed and move just the **P95 multiplier**: below 2 = PTU-first, 2–4 = spillover, 4+ = PAYGO. The recommendation also turns to *PAYGO / pilot* whenever the steady baseline needs fewer PTUs than the model minimum (e.g. set **Average RPM** to `1`), since a dedicated PTU deployment would sit idle.
 
 ## Understanding the inputs
+
+### Model preset
+
+- **Model preset** — selecting a model (`gpt-4.1`, `gpt-5`, `gpt-4o`, `Llama-3.3-70B`) auto-fills the official sizing constants — **Model TPM per PTU**, **Output weighting** (output-to-input ratio), **Minimum PTU commit**, and **PTU scale increment** — and locks those fields. Choose **Custom** to edit them freely. Values mirror the Microsoft Learn sizing tables and should still be re-verified against current docs.
 
 ### Workload inputs
 
 - **Average RPM** — average requests per minute. Drives total volume for both throughput sizing and monthly cost.
 - **Avg input tokens / request** — prompt size. Only the non-cached portion counts toward throughput and cost.
 - **Avg output tokens / request** — completion size. Output is the expensive part: weighted heavily in the throughput proxy and priced higher in PAYGO.
-- **P95 load multiplier** — how much higher your 95th-percentile minute is vs. the average minute. This **is** the burst ratio and decides the architecture recommendation: `<2` → PTU-first, `2–4` → PTU + spillover, `≥4` → PAYGO.
+- **P95 load multiplier** — how much higher your 95th-percentile minute is vs. the average minute. This **is** the burst ratio. Combined with baseline scale it decides the architecture recommendation: `<2` → PTU-first, `2–4` → PTU + spillover, `≥4` → PAYGO — and any baseline below the model minimum is steered to PAYGO/pilot regardless.
 - **Prompt cache rate** — fraction of input tokens served from prompt cache. These are removed from the effective input load (`input × (1 − cache_rate)`). Higher cache = less load and lower cost.
 - **Baseline load factor** — the share of the P95 peak you size your committed PTU baseline to cover (0.70 = size for 70% of peak, let spillover handle the rest). Lower = smaller, cheaper PTU commit leaning more on Standard/PAYGO.
 
@@ -94,22 +98,37 @@ baselineTPM = p95TPM × baselineLoadFactor
 
 ### Advanced assumptions
 
-- **Model TPM per PTU** — throughput (tokens/min) one PTU delivers for the chosen model. Key conversion from TPM to PTUs (`baselineTPM / modelTpmPerPtu`). **Replace with the validated per-model value** — it is a placeholder.
-- **Output weighting** — multiplier applied to output tokens in the throughput proxy (default 4×) because generating tokens costs more capacity than reading them. Raising it sizes output-heavy workloads larger.
-- **Safety buffer** — headroom added on top of the raw PTU estimate (0.15 = +15%) before rounding up, so you are not sized exactly at the edge.
-- **Minimum PTU commit** — smallest PTU quantity you would actually purchase (model/contract minimum). The recommendation is floored here, so tiny workloads still show 15, not 1.
+- **Model TPM per PTU** — throughput (tokens/min) one PTU delivers for the chosen model. Key conversion from TPM to PTUs (`baselineTPM / modelTpmPerPtu`). Set automatically by the model preset; placeholder when Custom.
+- **Output weighting** — the model's output-to-input ratio applied to output tokens in the throughput proxy (4× for gpt-4.1, 8× for gpt-5) because generating tokens costs more capacity than reading them.
+- **Safety buffer** — headroom added on top of the raw PTU estimate (0.15 = +15%) before rounding up, so you are not sized exactly at the edge. (The official method has no buffer — this is intentionally conservative.)
+- **Minimum PTU commit** — smallest PTU quantity the model allows (15 for OpenAI, 100 for Llama). The recommendation is floored here.
+- **PTU scale increment** — deployments can only be sized in fixed steps (5 for OpenAI, 100 for Llama). The recommendation is rounded **up** to the next valid increment, matching what you can actually provision.
 
 Putting it together:
 
 ```
-recommendedPTU = max( ceil( (baselineTPM / modelTpmPerPtu) × (1 + safetyBuffer) ), minPtuCommit )
+roundedUp(x, inc) = ceil(x / inc) × inc
+recommendedPTU    = max( roundedUp( (baselineTPM / modelTpmPerPtu) × (1 + safetyBuffer), increment ),
+                         roundedUp( minPtuCommit, increment ) )
 ```
 
 ### Cost assumptions (PTU vs PAYGO comparison)
 
-- **PTU hourly price (USD)** — price per PTU per hour → `recommendedPTU × price × hoursPerMonth`.
-- **PAYGO input / 1M tokens** and **PAYGO output / 1M tokens** — consumption pricing, applied to the effective monthly input/output tokens.
+- **PTU hourly price (USD)** — list price per PTU per hour → `recommendedPTU × price × hoursPerMonth`. Shown in the metric help as the pre-discount hourly cost.
+- **Reservation discount** — fraction off the hourly price for a 1-month or 1-year Azure Reservation (production PTU is normally reserved, not hourly). The headline **PTU monthly** uses the discounted reserved price; `0` = pure hourly.
+- **PAYGO input / 1M tokens** and **PAYGO output / 1M tokens** — consumption pricing for uncached input and output tokens.
+- **PAYGO cached input / 1M tokens** — cached prompt tokens are billed at a **discounted rate, not free**, so the comparison does not overstate PAYGO savings.
 - **Hours per month** — billing window (730 ≈ a full month) used for both PTU cost and total request volume.
+
+Three cost lines are shown:
+
+```
+PTU monthly      = recommendedPTU × hourlyPrice × (1 − reservationDiscount) × hours
+PAYGO monthly    = uncachedInput×inputRate + cachedInput×cachedRate + output×outputRate
+PTU + spillover  = PTU monthly (reserved baseline) + spillFraction × PAYGO monthly
+```
+
+where `spillFraction` is the share of P95 peak demand above the provisioned PTU capacity, billed to a Standard deployment.
 
 All prices and the per-PTU throughput are **indicative placeholders** — swap in validated Azure values before sharing externally.
 
