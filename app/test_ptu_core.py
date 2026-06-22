@@ -95,6 +95,22 @@ def test_blended_spillover_between_reserved_and_paygo():
     )
 
 
+def test_peak_minutes_fraction_scales_spillover():
+    # More time spent at peak -> more demand above capacity spills -> higher blended cost
+    low = calculate({**DEFAULTS, "peak_minutes_fraction": 0.05})
+    high = calculate({**DEFAULTS, "peak_minutes_fraction": 0.50})
+    assert high["spill_fraction"] > low["spill_fraction"]
+    assert high["blended_monthly"] > low["blended_monthly"]
+
+
+def test_capacity_above_peak_has_no_spillover():
+    # Huge PTU baseline (factor 1.0, big buffer) so capacity covers the P95 peak
+    vals = {**DEFAULTS, "baseline_load_factor": 1.0, "safety_buffer": 0.5, "peak_minutes_fraction": 0.5}
+    r = calculate(vals)
+    assert r["spill_fraction"] == pytest.approx(0.0)
+    assert r["blended_monthly"] == pytest.approx(r["ptu_monthly_reserved"])
+
+
 def test_min_ptu_commit_floor_applies_for_tiny_workload():
     vals = {**DEFAULTS, "avg_rpm": 1, "min_ptu_commit": 15}
     r = calculate(vals)

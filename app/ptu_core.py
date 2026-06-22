@@ -13,6 +13,7 @@ DEFAULTS = {
     "avg_input_tokens": 1800,
     "avg_output_tokens": 650,
     "p95_multiplier": 1.8,
+    "peak_minutes_fraction": 0.10,
     "cache_rate": 0.20,
     "model_tpm_per_ptu": 3000,
     "output_weight": 4.0,
@@ -100,12 +101,18 @@ def calculate(values):
         {"term": "Yearly reservation", "per_ptu_monthly": _per_ptu(ptu_yearly_reserved), "total_monthly": ptu_yearly_reserved, "savings": reservation_discount_yearly},
     ]
 
-    # Indicative blended "PTU baseline + spillover" cost: the recommended PTU
-    # serves its capacity; demand above that (toward the P95 peak) spills to a
-    # Standard deployment billed at PAYGO rates.
+    # Indicative blended "PTU baseline + spillover" cost. Demand above the
+    # provisioned PTU capacity spills to a Standard deployment billed at PAYGO
+    # rates. A simple duty cycle models how often demand actually reaches the
+    # peak: for `peak_minutes_fraction` of the time demand sits at the P95
+    # level, and at the average level the rest of the time. Spill only occurs
+    # (and is only paid for) when demand exceeds capacity in each regime.
+    peak_minutes_fraction = values.get("peak_minutes_fraction", DEFAULTS["peak_minutes_fraction"])
+    f = min(max(peak_minutes_fraction, 0.0), 1.0)
     ptu_capacity_tpm = recommended_ptu * model_tpm_per_ptu
-    spill_tpm = max(p95_tpm - ptu_capacity_tpm, 0)
-    spill_fraction = (spill_tpm / p95_tpm) if p95_tpm > 0 else 0
+    spill_demand = f * max(p95_tpm - ptu_capacity_tpm, 0) + (1 - f) * max(avg_tpm - ptu_capacity_tpm, 0)
+    total_demand = f * p95_tpm + (1 - f) * avg_tpm
+    spill_fraction = (spill_demand / total_demand) if total_demand > 0 else 0
     blended_monthly = ptu_monthly_reserved + spill_fraction * paygo_monthly
 
     fills_minimum = raw_baseline_ptu >= values["min_ptu_commit"]

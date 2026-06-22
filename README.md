@@ -88,6 +88,7 @@ To flip the recommendation, keep everything else fixed and move just the **P95 m
 - **P95 load multiplier** — how much higher your 95th-percentile minute is vs. the average minute. This **is** the burst ratio. Combined with baseline scale it decides the architecture recommendation: `<2` → PTU-first, `2–4` → PTU + spillover, `≥4` → PAYGO — and any baseline below the model minimum is steered to PAYGO/pilot regardless.
 - **Prompt cache rate** — fraction of input tokens served from prompt cache. These are removed from the effective input load (`input × (1 − cache_rate)`). Higher cache = less load and lower cost.
 - **Baseline load factor** — the share of the P95 peak you size your committed PTU baseline to cover (0.70 = size for 70% of peak, let spillover handle the rest). Lower = smaller, cheaper PTU commit leaning more on Standard/PAYGO.
+- **Peak minutes fraction** — share of minutes the workload actually runs at its P95 peak (vs. its average minute). Drives the blended spillover cost: spill is only paid for during the time demand exceeds provisioned capacity, so a low duty cycle (e.g. 10%) produces far less spillover than assuming the peak is constant.
 
 The core throughput number ("input-equivalent TPM"):
 
@@ -131,7 +132,14 @@ PAYGO monthly    = uncachedInput×inputRate + cachedInput×cachedRate + output×
 PTU + spillover  = PTU 1-mo reserved + spillFraction × PAYGO monthly
 ```
 
-where `spillFraction` is the share of P95 peak demand above the provisioned PTU capacity, billed to a Standard deployment.
+where `spillFraction` is the time-weighted share of monthly demand above the provisioned PTU capacity. A simple duty cycle is used: for `peakMinutesFraction` of the time demand sits at the P95 level and at the average level the rest of the time, and spill is only counted where demand exceeds capacity in each regime:
+
+```
+capacity     = recommendedPTU × modelTpmPerPtu
+spillDemand  = f × max(p95TPM − capacity, 0) + (1 − f) × max(avgTPM − capacity, 0)
+totalDemand  = f × p95TPM + (1 − f) × avgTPM
+spillFraction = spillDemand / totalDemand            # f = peakMinutesFraction
+```
 
 All prices and the per-PTU throughput are **indicative placeholders** — swap in validated Azure values before sharing externally.
 

@@ -44,6 +44,7 @@ with left:
     with c3:
         cache_rate = st.slider("Prompt cache rate", min_value=0.0, max_value=0.9, value=float(DEFAULTS["cache_rate"]), step=0.05)
         baseline_load_factor = st.slider("Baseline load factor", min_value=0.4, max_value=1.0, value=1.0 if foundry_mode else float(DEFAULTS["baseline_load_factor"]), step=0.05, disabled=foundry_mode)
+        peak_minutes_fraction = st.slider("Peak minutes fraction", min_value=0.0, max_value=1.0, value=float(DEFAULTS["peak_minutes_fraction"]), step=0.05, help="Share of minutes the workload runs at its P95 peak (vs. its average minute). Drives how much traffic spills to Standard in the blended cost.")
 
     with st.expander("Advanced assumptions", expanded=True):
         a1, a2, a3, a4, a5 = st.columns(5)
@@ -81,6 +82,7 @@ values = {
     "avg_input_tokens": avg_input_tokens,
     "avg_output_tokens": avg_output_tokens,
     "p95_multiplier": p95_multiplier,
+    "peak_minutes_fraction": peak_minutes_fraction,
     "cache_rate": cache_rate,
     "model_tpm_per_ptu": model_tpm_per_ptu,
     "output_weight": output_weight,
@@ -117,7 +119,7 @@ st.subheader("Monthly cost comparison")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("PTU monthly (1-mo reserved)", f'${calc["ptu_monthly"]:,.0f}', help=f'Hourly list: ${calc["ptu_hourly_monthly"]:,.0f}/mo before any reservation discount.')
 m2.metric("PAYGO monthly", f'${calc["paygo_monthly"]:,.0f}')
-m3.metric("PTU + spillover", f'${calc["blended_monthly"]:,.0f}', help=f'Reserved PTU baseline plus PAYGO for the ~{calc["spill_fraction"]*100:,.0f}% of peak demand above provisioned capacity.')
+m3.metric("PTU + spillover", f'${calc["blended_monthly"]:,.0f}', help=f'Reserved PTU baseline plus PAYGO for the ~{calc["spill_fraction"]*100:,.1f}% of monthly demand that exceeds provisioned capacity, given the peak-minutes duty cycle.')
 delta_label = "PTU saves" if calc["savings_delta"] >= 0 else "PAYGO saves"
 m4.metric(delta_label, f'${abs(calc["savings_delta"]):,.0f}')
 
