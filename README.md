@@ -54,8 +54,11 @@ Type these into the **Workload inputs**; leave the Advanced and Cost assumptions
 What you should see:
 
 - **A** → 🔵 *PTU-first production baseline* (burst 1.50x), recommended PTUs rounded up to the model scale increment (multiples of 5 for OpenAI models).
+  - **Why:** the burst ratio is below 2, so traffic is predictable and a dedicated PTU deployment runs near full utilization with stable latency. **Next:** provision the recommended PTUs on Global, lock the ~64% discount with a 1-month reservation, and watch utilization for a few weeks before committing to a 1-year term.
 - **B** → 🟢 *PTU + Standard spillover* (burst 2.80x), several hundred PTUs — the recommendation is driven by **burstiness**, not raw cost (with confirmed gpt-4.1-class PAYGO rates the dedicated PTU baseline can cost more than pure PAYGO at this volume; PTU buys predictable capacity, latency, and burst protection).
+  - **Why:** a 2–4x burst means a peak-sized PTU deployment would sit idle most of the time, so size PTUs to the baseline and let Standard absorb the spikes. **Next:** deploy the baseline PTUs on Global or Data Zone (spillover-capable), attach a matching Standard deployment for overflow, and load-test to confirm spillover behaves under peak.
 - **C** → 🟠 *PAYGO or smaller PTU pilot* (burst 4.50x), small PTU count near the minimum.
+  - **Why:** with a 4x+ burst (or a baseline below the model minimum) a committed PTU deployment would sit mostly idle and cost more than usage-based billing. **Next:** start on PAYGO (Standard), instrument real traffic, and only revisit PTU once the sustained baseline grows past the model minimum.
 
 To flip the recommendation, keep everything else fixed and move just the **P95 multiplier**: below 2 = PTU-first, 2–4 = spillover, 4+ = PAYGO. The recommendation also turns to *PAYGO / pilot* whenever the steady baseline needs fewer PTUs than the model minimum (e.g. set **Average RPM** to `1`), since a dedicated PTU deployment would sit idle.
 
