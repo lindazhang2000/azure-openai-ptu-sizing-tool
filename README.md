@@ -88,6 +88,35 @@ Two effects make Regional the most expensive: the larger **minimum / increment**
 
 Note the recommendation is **burst-driven, not a pure cost minimizer**: at 60 RPM with confirmed gpt-4.1 PAYGO rates ($2 in / $8 out), pay-as-you-go is actually cheaper than *any* PTU commit, so PTU here is justified by predictable latency/throughput and burst protection rather than raw cost. PTU economics improve for steadier, higher-volume traffic and for pricier models. Across all of that, the deployment-type ordering is constant: **Global is cheapest with the broadest region coverage; Data Zone is a 10% premium for EU/US data-zone routing; Regional is the costly last resort** you pick only when data residency mandates it (and recall Regional has **no automatic spillover**).
 
+## Top PTU mistakes this tool prevents
+
+A handful of sizing mistakes come up again and again. The biggest ones are exactly what this tool is built to catch:
+
+- **Sizing to peak instead of baseline** — it sizes PTUs to the steady baseline and shows peak as a *separate* reference, so you don't buy dedicated capacity for spikes.
+- **Ignoring burstiness** — the burst ratio (P95 ÷ average) drives the recommendation, surfacing spiky workloads that belong on spillover or PAYGO.
+- **Choosing PTU purely on cost** — the PTU-vs-PAYGO comparison makes it explicit when PAYGO is cheaper, so PTU is positioned for *predictability*, not just price.
+- **Overcommitting upfront** — the headline cost uses the 1-month reservation, and the guidance is **start hourly → validate → then reserve**.
+- **Using Regional unnecessarily** — the deployment-type comparison exposes Regional's higher minimum and double hourly price, so it's reserved for genuine data-residency needs.
+
+### Top 10 PTU mistakes (customer leave-behind)
+
+Avoid these to get predictable performance, cost control, and confident scale:
+
+| # | Mistake | Reality | Fix |
+| --- | --- | --- | --- |
+| 1 | Sizing on average instead of peak | PTU is driven by **peak** throughput and token shape | Size for the P95/P99 workload, not the average |
+| 2 | Buying a reservation too early | Reservations are a **billing layer**, not capacity | Start hourly → validate → then reserve |
+| 3 | Ignoring routing & spillover | PTU needs a PAYGO spillover / routing layer for bursts | Design for PTU baseline + burst overflow |
+| 4 | Mixing unrelated workloads | Different workloads = different latency + token patterns | Segment or prioritize via routing / APIM |
+| 5 | Wrong model assumptions | Throughput varies by model + token shape + latency target | Size per model and use real telemetry |
+| 6 | Over-sizing for every spike | PTU is **steady-state baseline**, not spike coverage | Use PAYGO for spikes, PTU for core load |
+| 7 | Misunderstanding the SLA | PTU SLA covers **model processing only**, not end-to-end latency | Separate backend SLA from app latency (network, orchestration) |
+| 8 | No real telemetry before sizing | Sizing depends on RPM, TPM, token ratios, caching | Collect at least 1–2 weeks of workload data |
+| 9 | Ignoring architecture (APIM / multi-region) | Routing, resiliency, and allocation need a platform layer | Design the full architecture, not just the model deployment |
+| 10 | Treating PTU as cost optimization first | PTU is for predictability, latency stability, production scale | Position PTU as performance + reliability, not just cost |
+
+**Takeaway:** PTU = baseline capacity for predictable workloads · PAYGO = elasticity layer for spikes · success = right sizing + routing + a validation loop.
+
 ## Understanding the inputs
 
 ### Model preset
