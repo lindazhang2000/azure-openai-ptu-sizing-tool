@@ -1,25 +1,25 @@
-# PTU Sizing Demo Standalone Artifacts
+# PTU Sizing Tool
 
-This package contains two standalone artifacts derived from the interactive PTU sizing workshop demo:
+This package contains two front-ends over the shared `ptu_core` sizing engine:
 
 1. **Streamlit app** – `ptu_streamlit_app.py`
-2. **Jupyter notebook** – `PTU_Sizing_Demo_Notebook.ipynb`
+2. **Jupyter notebook** – `PTU_Sizing_Notebook.ipynb`
 
 ## Streamlit
 
 ```bash
-pip install -r requirements_ptu_demo.txt
+pip install -r requirements.txt
 streamlit run ptu_streamlit_app.py
 ```
 
 ## Notebook
 
 ```bash
-pip install -r requirements_ptu_demo.txt
-jupyter notebook PTU_Sizing_Demo_Notebook.ipynb
+pip install -r requirements.txt
+jupyter notebook PTU_Sizing_Notebook.ipynb
 ```
 
-## Using the demo
+## Using the tool
 
 1. Pick a **Model preset** (`gpt-5.2`, `gpt-5.1`, `gpt-5`, `gpt-5-mini`, `gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-4o`, `Llama-3.3-70B`) or **Custom**. The preset fills model throughput, output weighting, minimum PTU commit, and scale increment.
 2. Pick a **Deployment type** — `Global`, `Data Zone`, or `Regional`. Global/Data Zone use the lower minimums (e.g. 15 PTUs, 5 increment); Regional uses larger model-specific minimums (e.g. 50/50 or 25/25). Only the types each model supports are listed. The type also sets the **hourly $/PTU** (confirmed: Global $1.00 < Data Zone $1.10 < Regional $2.00) and the **PAYGO token rates** (Global Standard base; Data Zone/Regional Standard exactly 10% higher); reservation prices do not vary by type. **Automatic spillover** (preview) is available on Global and Data Zone only — a Regional deployment with a bursty profile is flagged for *manual overflow*.
@@ -32,4 +32,4 @@ For a full walkthrough of every input, the sizing formulas, example scenarios, a
 
 ## Important note
 
-This is an **indicative workshop/demo artifact**, not the official PTU calculator. Replace model throughput, minimum PTU quantity, and pricing assumptions with validated customer-specific values before external sharing.
+This is an **internal sizing tool**, not the official Azure PTU calculator. Re-verify model throughput, minimum PTU quantity, and pricing against current Azure docs before quoting customer-specific numbers.

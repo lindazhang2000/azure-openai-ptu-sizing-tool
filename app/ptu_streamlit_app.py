@@ -4,9 +4,9 @@ import streamlit as st
 
 from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, paygo_rates, region_supported, spillover_supported
 
-st.set_page_config(page_title="PTU Sizing Demo", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="PTU Sizing Tool", page_icon="⚡", layout="wide")
 
-st.title("PTU Sizing Demo")
+st.title("PTU Sizing Tool")
 st.caption("Indicative workshop tool for PTU discovery, cost comparison, and architecture recommendations.")
 
 with st.sidebar:
@@ -14,7 +14,7 @@ with st.sidebar:
     if st.button("Reset to default assumptions"):
         for k, v in DEFAULTS.items():
             st.session_state[k] = v
-    st.markdown("**Note**  \nThis is a workshop/demo artifact. Replace model throughput, minimums, and pricing with validated customer-specific values before external use.")
+    st.markdown("**Note**  \nThis is an internal sizing tool, not the official Azure PTU calculator. Re-verify model throughput, minimums, and pricing against current Azure docs before quoting customer-specific numbers.")
 
 left, right = st.columns([1.25, 0.75], gap="large")
 
@@ -194,5 +194,5 @@ st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 st.caption(
-    "Designed as an indicative workshop/demo artifact. It reflects the same field guidance used in your PTU playbook: size PTU for the steady-state baseline, use Standard or PAYGO for spillover, and treat reservation as a billing optimization after validation."
+    "Designed as an internal sizing tool. It reflects the same field guidance used in your PTU playbook: size PTU for the steady-state baseline, use Standard or PAYGO for spillover, and treat reservation as a billing optimization after validation."
 )

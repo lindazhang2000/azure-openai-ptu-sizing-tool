@@ -8,29 +8,29 @@ An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Uni
 
 | Path | Contents |
 | --- | --- |
-| [app/](app) | The PTU sizing demo: Streamlit app, notebook, README, and requirements. |
+| [app/](app) | The PTU sizing tool: Streamlit app, notebook, README, and requirements. |
 
-## Running the demo
+## Running the tool
 
 From the [app/](app) folder:
 
 ### Streamlit app
 
 ```bash
-pip install -r requirements_ptu_demo.txt
+pip install -r requirements.txt
 streamlit run ptu_streamlit_app.py
 ```
 
 ### Jupyter notebook
 
 ```bash
-pip install -r requirements_ptu_demo.txt
-jupyter notebook PTU_Sizing_Demo_Notebook.ipynb
+pip install -r requirements.txt
+jupyter notebook PTU_Sizing_Notebook.ipynb
 ```
 
-## What the demo does
+## What the tool does
 
-Given workload inputs (average RPM, input/output tokens per request, P95 multiplier, prompt cache rate, etc.) and cost assumptions, the demo:
+Given workload inputs (average RPM, input/output tokens per request, P95 multiplier, prompt cache rate, etc.) and cost assumptions, the tool:
 
 1. Estimates a steady-state **baseline PTU** recommendation and a **peak reference PTU** figure.
 2. Compares **PTU vs PAYGO** monthly cost.
@@ -147,12 +147,12 @@ All `$/PTU/hr` hourly prices, reservation discounts, and per-model PAYGO token r
 
 ## Official Microsoft Foundry PTU references
 
-The demo's sizing formula mirrors the official **normalized TPM** method. Always validate against current Microsoft Learn guidance and the in-portal capacity calculator:
+The tool's sizing formula mirrors the official **normalized TPM** method. Always validate against current Microsoft Learn guidance and the in-portal capacity calculator:
 
 - [Determine PTU sizing for a workload](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/provisioned-throughput-sizing) — sizing formulas, per-model `Input TPM per PTU` and output-to-input ratios, minimums, and scale increments.
 - [Provisioned throughput billing and cost management](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/provisioned-throughput-billing) — hourly vs. Azure Reservations, sizing and managing reservations.
 - [Operate provisioned throughput deployments in production](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/provisioned-get-started) — quota, utilization (leaky-bucket), 429 handling, benchmarking, scaling.
 - [Manage traffic with spillover for provisioned deployments](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/spillover-traffic-management) — auto-routing overflow to a standard deployment and spillover cost mechanics.
-- [Models sold directly by Azure — region availability](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability?pivots=provisioned) — authoritative per-model, per-deployment-type provisioned region availability (the source the demo's indicative region lists are derived from).
+- [Models sold directly by Azure — region availability](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability?pivots=provisioned) — authoritative per-model, per-deployment-type provisioned region availability (the source the tool's indicative region lists are derived from).
 - [Plan and manage costs (Microsoft Foundry)](https://learn.microsoft.com/en-us/azure/foundry/concepts/manage-costs) — Cost Management, meters, budgets; note portal estimates exclude PTU and discounts.
 - [Quickstart: Create a provisioned throughput deployment](https://learn.microsoft.com/en-us/azure/foundry/openai/provisioned-quickstart) — deploy, make an inference call, and view utilization.
