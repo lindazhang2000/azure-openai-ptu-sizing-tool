@@ -1,3 +1,16 @@
+---
+page_type: sample
+languages:
+- python
+products:
+- azure
+- azure-openai
+- ai-services
+urlFragment: azure-openai-ptu-sizing-tool
+name: Azure OpenAI PTU Sizing & Architecture Guidance Tool
+description: An interactive Streamlit app and Jupyter notebook that estimate Azure OpenAI Provisioned Throughput Unit (PTU) needs and compare PTU vs pay-as-you-go cost.
+---
+
 # Azure OpenAI PTU Sizing & Architecture Guidance Tool
 
 An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs and compare PTU vs PAYGO cost.
@@ -218,3 +231,17 @@ The tool's sizing formula mirrors the official **normalized TPM** method. Always
 - [Models sold directly by Azure — region availability](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability?pivots=provisioned) — authoritative per-model, per-deployment-type provisioned region availability (the source the tool's indicative region lists are derived from).
 - [Plan and manage costs (Microsoft Foundry)](https://learn.microsoft.com/en-us/azure/foundry/concepts/manage-costs) — Cost Management, meters, budgets; note portal estimates exclude PTU and discounts.
 - [Quickstart: Create a provisioned throughput deployment](https://learn.microsoft.com/en-us/azure/foundry/openai/provisioned-quickstart) — deploy, make an inference call, and view utilization.
+
+## Contributing
+
+This project welcomes contributions and suggestions. See [CONTRIBUTING.md](CONTRIBUTING.md) for details. Most contributions require you to agree to a Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+## Trademarks
+
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general). Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.
