@@ -21,6 +21,10 @@ An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Uni
 >
 > **Customer-safe usage:** Use this for **directional sizing and architecture discussion only**. **Always validate with the official Azure/Foundry PTU calculator and current pricing before any quote, reservation, or capacity commitment.**
 
+## Who this is for
+
+Solution engineers, architects, and customers evaluating **PTU vs PAYGO** for production AI workloads.
+
 ## The PTU decision triangle
 
 Every PTU decision trades off three forces. PTU sits in the middle — you lean toward whichever corner the workload demands:
