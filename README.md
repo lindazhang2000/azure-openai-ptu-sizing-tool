@@ -13,15 +13,17 @@ Every PTU decision trades off three forces. PTU sits in the middle — you lean 
 ```mermaid
 graph TD
     P["⚡ Performance<br/>Maximize speed,<br/>throughput &amp; efficiency"]
+    PTU(("PTU"))
     C["💲 Cost — Pay-as-you-go<br/>Optimize spend,<br/>pay only for what you use"]
     F["☁️ Flexibility — Hybrid<br/>Scale, adapt &amp; modernize<br/>across environments"]
-    PTU(("PTU"))
-    P -. "more performance" .- PTU
-    C -. "more flexibility" .- PTU
-    F -. "more agility" .- PTU
+
     P --- C
+    P --- F
     C --- F
-    F --- P
+
+    P -. lean .- PTU
+    C -. lean .- PTU
+    F -. lean .- PTU
 ```
 
 | Corner | What it optimizes for | How it maps to this tool |
