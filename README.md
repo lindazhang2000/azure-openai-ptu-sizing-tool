@@ -23,9 +23,9 @@ An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Uni
 
 ![Streamlit app screenshot showing workload inputs and the recommended PTU output](docs/app-screenshot.png)
 
-> **Disclaimer:** This is an **internal sizing tool**, not the official Azure PTU calculator. The sizing constants are indicative — re-verify model throughput, minimum PTU commit, and pricing against current Azure docs before quoting customer-specific numbers.
+> **Disclaimer:** This tool provides **illustrative and directional guidance only** and is **not an official Azure PTU calculator**. Throughput assumptions, minimum PTU commitments, and pricing are subject to change. Always verify against current Azure documentation before making customer-specific decisions.
 >
-> **Customer-safe usage:** Use this for **directional sizing and architecture discussion only**. **Always validate with the official Azure/Foundry PTU calculator and current pricing before any quote, reservation, or capacity commitment.**
+> **Recommended usage:** Use this tool to support **architecture discussions and initial sizing exploration**. Always validate results with the official Azure OpenAI / Microsoft Foundry PTU calculator and current pricing before any production deployment, reservation, or capacity commitment.
 
 ## Who this is for
 
