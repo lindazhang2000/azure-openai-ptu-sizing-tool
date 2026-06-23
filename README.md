@@ -41,6 +41,22 @@ From a few workload inputs, it answers the three questions that drive an Azure O
 
 Everything below the next two sections is reference depth — read it when you need the formulas, assumptions, and worked scenarios.
 
+## Why this vs the official Azure PTU calculator
+
+The two are **complementary, not competing**. Microsoft's calculator is the authoritative source for throughput, minimums, and pricing — always validate final numbers there. This tool focuses on the **architecture decision that comes *before* sizing**:
+
+| | This tool | Official Azure PTU calculator |
+| --- | --- | --- |
+| **Primary output** | An architecture *recommendation* (PTU-first / PTU + spillover / PAYGO) | A PTU *quantity* |
+| **PTU vs PAYGO cost** | Side-by-side comparison with break-even made explicit | Not the focus |
+| **Burstiness** | Models steady baseline vs peak (P95 multiplier + baseline load factor) so you size to baseline, not peak | Sizes to the throughput you enter |
+| **Spillover** | Flags feasibility by deployment type (Global/Data Zone vs Regional) | Not addressed |
+| **Reservations** | 1-month / 1-year discount folded into the cost story | Not addressed |
+| **Transparency** | Open-source formulas, editable assumptions, notebook | Hosted, fixed logic |
+| **Pricing/throughput authority** | Directional — verify before quoting | ✅ Authoritative and current |
+
+**Use this** to decide the pattern and frame PTU-vs-PAYGO in early architecture conversations; **use Microsoft's** to lock the final, quotable numbers.
+
 ## The PTU decision triangle
 
 Every PTU decision trades off three forces. PTU sits in the middle — you lean toward whichever corner the workload demands:
