@@ -127,6 +127,7 @@ Type these into the **Workload inputs**; leave the Advanced and Cost assumptions
 | P95 load multiplier | 1.5 | 2.8 | 4.5 |
 | Prompt cache rate | 0.30 | 0.20 | 0.10 |
 | Baseline load factor | 0.70 | 0.70 | 0.70 |
+| **→ Burst ratio (P95 ÷ average)** | **1.5x** | **2.8x** | **4.5x** |
 
 What you should see:
 
