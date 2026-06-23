@@ -117,7 +117,7 @@ The guiding principle: size PTU for the steady-state baseline, use Standard/PAYG
 
 ## Example scenarios to try
 
-Type these into the **Workload inputs**; leave the Advanced and Cost assumptions at their defaults. The architecture recommendation is driven by the **P95 load multiplier** (burst ratio = P95 / average).
+Type these into the **Workload inputs**; leave the Advanced and Cost assumptions at their defaults. The architecture recommendation is driven by the **P95 load multiplier** — it already expresses your peak (P95) relative to average, so the multiplier *is* the burst ratio (e.g. `2.8` = peaks run 2.8x the average).
 
 | Input | A — Steady chatbot | B — Bursty RAG | C — Spiky / low baseline |
 | --- | --- | --- | --- |
