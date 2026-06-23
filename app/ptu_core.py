@@ -1,9 +1,10 @@
 """Shared PTU sizing logic.
 
 Pure, dependency-free calculation used by both the Streamlit app and the
-Jupyter notebook so the two cannot drift. This is an internal sizing tool, not
-the official Azure PTU calculator; re-verify model throughput, minimum commit,
-and pricing against current Azure docs before quoting customer-specific numbers.
+Jupyter notebook so the two cannot drift. This tool provides illustrative and
+directional guidance only and is not an official Azure PTU calculator; throughput
+assumptions, minimum PTU commitments, and pricing are subject to change. Always
+verify against current Azure documentation before making customer-specific decisions.
 """
 
 import math

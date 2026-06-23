@@ -32,4 +32,4 @@ For a full walkthrough of every input, the sizing formulas, example scenarios, a
 
 ## Important note
 
-This is an **internal sizing tool**, not the official Azure PTU calculator. Re-verify model throughput, minimum PTU quantity, and pricing against current Azure docs before quoting customer-specific numbers.
+This tool provides **illustrative and directional guidance only** and is **not an official Azure PTU calculator**. Throughput assumptions, minimum PTU commitments, and pricing are subject to change. Always verify against current Azure documentation before making customer-specific decisions.

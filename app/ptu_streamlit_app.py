@@ -279,5 +279,5 @@ st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 st.caption(
-    "Designed as an internal sizing tool. It reflects the same field guidance used in your PTU playbook: size PTU for the steady-state baseline, use Standard or PAYGO for spillover, and treat reservation as a billing optimization after validation."
+    "Designed for illustrative and directional sizing guidance. It reflects the same field guidance used in your PTU playbook: size PTU for the steady-state baseline, use Standard or PAYGO for spillover, and treat reservation as a billing optimization after validation."
 )
