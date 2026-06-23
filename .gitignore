@@ -33,3 +33,6 @@ desktop.ini
 
 # Local-only authoring scratch (not part of the published sample)
 linkedin/
+
+# Playwright MCP scratch output
+.playwright-mcp/

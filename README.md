@@ -21,8 +21,7 @@ description: An interactive Streamlit app and Jupyter notebook that estimate Azu
 
 An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs, compare PTU vs PAYGO cost, and recommend an architecture pattern.
 
-<!-- TODO: replace with a real screenshot/GIF of the Streamlit app, e.g. docs/app-screenshot.png -->
-<!-- ![Streamlit app screenshot](docs/app-screenshot.png) -->
+![Streamlit app screenshot showing workload inputs and the recommended PTU output](docs/app-screenshot.png)
 
 > **Disclaimer:** This is an **internal sizing tool**, not the official Azure PTU calculator. The sizing constants are indicative — re-verify model throughput, minimum PTU commit, and pricing against current Azure docs before quoting customer-specific numbers.
 >
