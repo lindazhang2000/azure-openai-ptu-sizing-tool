@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a problem with the PTU sizing tool
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill out the sections below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including which surface (Streamlit app or notebook).
+      placeholder: When I select gpt-4.1 with a Regional deployment, ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The inputs you used (model, deployment type, RPM, tokens, etc.) and what you did.
+      placeholder: |
+        1. Model preset = ...
+        2. Deployment type = ...
+        3. Average RPM = ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Environment
+      description: OS, Python version, and how you ran the tool.
+      placeholder: Windows 11, Python 3.11, streamlit run ...
+    validations:
+      required: false
