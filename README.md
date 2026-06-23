@@ -117,7 +117,7 @@ The guiding principle: size PTU for the steady-state baseline, use Standard/PAYG
 
 ## Example scenarios to try
 
-Type these into the **Workload inputs**; leave the Advanced and Cost assumptions at their defaults. The architecture recommendation is driven by the **P95 load multiplier** — it expresses your peak versus average load, matching the **peak requests/minute ÷ average requests/minute** ratio used by Microsoft's PTU calculator. Because request size is constant, scaling peak requests/minute scales peak token throughput by the same factor, so the multiplier *is* the burst ratio (e.g. `2.8` = peaks run 2.8x the average).
+Type these into the **Workload inputs** (the `→` row is calculated for reference, not an input); leave the Advanced and Cost assumptions at their defaults. The architecture recommendation is driven by the **P95 load multiplier** — it expresses your peak versus average load, matching the **peak requests/minute ÷ average requests/minute** ratio used by Microsoft's PTU calculator. Because request size is constant, scaling peak requests/minute scales peak token throughput by the same factor, so the multiplier *is* the burst ratio (e.g. `2.8` = peaks run 2.8x the average).
 
 | Input | A — Steady chatbot | B — Bursty RAG | C — Spiky / low baseline |
 | --- | --- | --- | --- |
