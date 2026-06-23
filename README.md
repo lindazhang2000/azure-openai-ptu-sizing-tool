@@ -117,7 +117,7 @@ The guiding principle: size PTU for the steady-state baseline, use Standard/PAYG
 
 ## Example scenarios to try
 
-Type these into the **Workload inputs**; leave the Advanced and Cost assumptions at their defaults. The architecture recommendation is driven by the **P95 load multiplier** — it already expresses your peak (P95) relative to average, so the multiplier *is* the burst ratio (e.g. `2.8` = peaks run 2.8x the average).
+Type these into the **Workload inputs**; leave the Advanced and Cost assumptions at their defaults. The architecture recommendation is driven by the **P95 load multiplier** — it expresses your peak versus average load, matching the **peak requests/minute ÷ average requests/minute** ratio used by Microsoft's PTU calculator. Because request size is constant, scaling peak requests/minute scales peak token throughput by the same factor, so the multiplier *is* the burst ratio (e.g. `2.8` = peaks run 2.8x the average).
 
 | Input | A — Steady chatbot | B — Bursty RAG | C — Spiky / low baseline |
 | --- | --- | --- | --- |
@@ -198,7 +198,7 @@ Avoid these to get predictable performance, cost control, and confident scale:
 - **Average RPM** — average requests per minute. Drives total volume for both throughput sizing and monthly cost.
 - **Avg input tokens / request** — prompt size. Only the non-cached portion counts toward throughput and cost.
 - **Avg output tokens / request** — completion size. Output is the expensive part: weighted heavily in the throughput proxy and priced higher in PAYGO.
-- **P95 load multiplier** — in business terms, how much busier your peak 5% of minutes are than a typical minute (e.g. `1.8` = peaks run 80% above average). This **is** the burst ratio. Combined with baseline scale it decides the architecture recommendation: `<2` → PTU-first, `2–4` → PTU + spillover, `≥4` → PAYGO — and any baseline below the model minimum is steered to PAYGO/pilot regardless.
+- **P95 load multiplier** — in business terms, how much busier your peak 5% of minutes are than a typical minute (e.g. `1.8` = peaks run 80% above average). This matches the **peak requests/minute** input in Microsoft's PTU calculator: since request size is constant, the peak request rate and peak token throughput scale by the same factor, so this **is** the burst ratio. Combined with baseline scale it decides the architecture recommendation: `<2` → PTU-first, `2–4` → PTU + spillover, `≥4` → PAYGO — and any baseline below the model minimum is steered to PAYGO/pilot regardless.
 - **Prompt cache rate** — fraction of input tokens served from prompt cache. These are removed from the effective input load (`input × (1 − cache_rate)`). Higher cache = less load and lower cost.
 - **Baseline load factor** — the share of the P95 peak you size your committed PTU baseline to cover (0.70 = size for 70% of peak, let spillover handle the rest). Lower = smaller, cheaper PTU commit leaning more on Standard/PAYGO.
 - **Peak minutes fraction** — share of minutes the workload actually runs at its P95 peak (vs. its average minute). Drives the blended spillover cost: spill is only paid for during the time demand exceeds provisioned capacity, so a low duty cycle (e.g. 10%) produces far less spillover than assuming the peak is constant.
