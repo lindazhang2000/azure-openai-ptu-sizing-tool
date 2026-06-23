@@ -16,14 +16,11 @@ graph TD
     PTU(("PTU"))
     C["💲 Cost — Pay-as-you-go<br/>Optimize spend,<br/>pay only for what you use"]
     F["☁️ Flexibility — Hybrid<br/>Scale, adapt &amp; modernize<br/>across environments"]
-
+    P --- PTU
+    PTU --- C
+    PTU --- F
     P --- C
     P --- F
-    C --- F
-
-    P -. lean .- PTU
-    C -. lean .- PTU
-    F -. lean .- PTU
 ```
 
 | Corner | What it optimizes for | How it maps to this tool |
