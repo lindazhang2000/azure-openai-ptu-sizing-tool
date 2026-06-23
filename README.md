@@ -128,10 +128,12 @@ Avoid these to get predictable performance, cost control, and confident scale:
 
 ### Workload inputs
 
+> **What "P95" means, in plain terms:** the load level your workload reaches during its busiest 5% of the time — a *realistic* high, not the worst-case spike. Sizing to the average hides these peaks; sizing to P95 captures the load real users actually feel without overpaying for the rare extreme. (P99 is the same idea, stricter: the level only the worst 1% of minutes exceed.)
+
 - **Average RPM** — average requests per minute. Drives total volume for both throughput sizing and monthly cost.
 - **Avg input tokens / request** — prompt size. Only the non-cached portion counts toward throughput and cost.
 - **Avg output tokens / request** — completion size. Output is the expensive part: weighted heavily in the throughput proxy and priced higher in PAYGO.
-- **P95 load multiplier** — how much higher your 95th-percentile minute is vs. the average minute. This **is** the burst ratio. Combined with baseline scale it decides the architecture recommendation: `<2` → PTU-first, `2–4` → PTU + spillover, `≥4` → PAYGO — and any baseline below the model minimum is steered to PAYGO/pilot regardless.
+- **P95 load multiplier** — in business terms, how much busier your peak 5% of minutes are than a typical minute (e.g. `1.8` = peaks run 80% above average). This **is** the burst ratio. Combined with baseline scale it decides the architecture recommendation: `<2` → PTU-first, `2–4` → PTU + spillover, `≥4` → PAYGO — and any baseline below the model minimum is steered to PAYGO/pilot regardless.
 - **Prompt cache rate** — fraction of input tokens served from prompt cache. These are removed from the effective input load (`input × (1 − cache_rate)`). Higher cache = less load and lower cost.
 - **Baseline load factor** — the share of the P95 peak you size your committed PTU baseline to cover (0.70 = size for 70% of peak, let spillover handle the rest). Lower = smaller, cheaper PTU commit leaning more on Standard/PAYGO.
 - **Peak minutes fraction** — share of minutes the workload actually runs at its P95 peak (vs. its average minute). Drives the blended spillover cost: spill is only paid for during the time demand exceeds provisioned capacity, so a low duty cycle (e.g. 10%) produces far less spillover than assuming the peak is constant.
