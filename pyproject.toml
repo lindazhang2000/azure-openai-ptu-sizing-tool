@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ptu-sizing"
+version = "0.1.0"
+description = "Azure OpenAI PTU sizing engine with a Streamlit app and Jupyter notebook front-end."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit>=1.35",
+    "pandas>=2.0",
+    "altair>=5.0",
+    "matplotlib>=3.8",
+    "ipywidgets>=8.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+# ptu_core.py is a flat module living under app/. Expose it as an importable
+# top-level module so `pip install -e .` makes `import ptu_core` work anywhere.
+[tool.setuptools]
+package-dir = { "" = "app" }
+py-modules = ["ptu_core"]
+
+[tool.pytest.ini_options]
+testpaths = ["app"]

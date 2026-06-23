@@ -8,6 +8,15 @@ commit, and pricing assumptions with validated values before customer use.
 
 import math
 
+# All pricing constants in this module (deployment hourly $/PTU, reservation
+# discounts, and per-model PAYGO $/1M-token rates) were confirmed against the
+# Azure OpenAI pricing page on the date below. Bump this when you re-verify or
+# update any price so drift is obvious in one place.
+PRICING_CONFIRMED_AS_OF = "2026-06-22"
+PRICING_SOURCE_URL = (
+    "https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/"
+)
+
 DEFAULTS = {
     "avg_rpm": 60,
     "avg_input_tokens": 1800,
