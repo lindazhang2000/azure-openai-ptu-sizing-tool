@@ -4,6 +4,18 @@ An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Uni
 
 > **Disclaimer:** This is an **internal sizing tool**, not the official Azure PTU calculator. The sizing constants are indicative — re-verify model throughput, minimum PTU commit, and pricing against current Azure docs before quoting customer-specific numbers.
 
+## When to use PTU vs PAYGO
+
+The core decision this tool informs — pick the row that matches the workload's **burstiness** (peak ÷ average load):
+
+| Workload pattern | Recommendation | Why |
+| --- | --- | --- |
+| **Steady, predictable** (production chatbots, batch) | 🔵 **PTU** | Runs dedicated capacity near full utilization, with guaranteed latency and throughput. |
+| **Moderate burst** (RAG, copilots, agents) | 🟢 **PTU + spillover** | Size PTUs to the baseline and let a paired Standard deployment absorb peaks. |
+| **Spiky, low baseline** (pilots, internal tools, dev/test) | 🟠 **PAYGO** | A committed PTU deployment would sit idle; usage-based billing is cheaper and simpler. |
+
+> **Rule of thumb:** burst ratio below 2 → PTU; 2–4 → PTU + spillover; 4+ (or a baseline below the model's minimum PTU commit) → PAYGO. PTU is justified by **predictable latency, throughput, and burst protection** — not always by raw cost. See [Example scenarios to try](#example-scenarios-to-try) for worked numbers.
+
 ## Repository layout
 
 | Path | Contents |
