@@ -198,6 +198,23 @@ def _load_live_region_data():
 _LIVE_REGION_DATA = _load_live_region_data()
 
 
+def set_live_region_data(data):
+    """Override the in-memory live region data (e.g. fetched from blob storage).
+
+    ``data`` must be the same shape as ``region_data.json`` (a dict with a
+    ``models`` mapping). Pass ``None`` to revert to the static fallback. Returns
+    ``True`` when the override was accepted, ``False`` when ``data`` is malformed.
+    """
+    global _LIVE_REGION_DATA
+    if data is None:
+        _LIVE_REGION_DATA = None
+        return True
+    if isinstance(data, dict) and isinstance(data.get("models"), dict):
+        _LIVE_REGION_DATA = data
+        return True
+    return False
+
+
 def region_data_source():
     """Describe where region availability comes from.
 

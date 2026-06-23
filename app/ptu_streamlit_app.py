@@ -1,10 +1,42 @@
+import json
+import os
+
 import altair as alt
 import pandas as pd
 import streamlit as st
 
+import ptu_core
 from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, paygo_rates, region_data_source, region_supported, spillover_supported
 
 st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_region_data_from_blob(blob_url):
+    """Fetch region_data.json from Azure Blob Storage via managed identity / AAD.
+
+    Returns the parsed dict, or ``None`` on any failure so the app falls back to
+    the bundled ``region_data.json``. Cached for one hour to avoid repeated calls.
+    """
+    try:
+        from azure.identity import DefaultAzureCredential
+        from azure.storage.blob import BlobClient
+
+        credential = DefaultAzureCredential()
+        client = BlobClient.from_blob_url(blob_url, credential=credential)
+        raw = client.download_blob().readall()
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+# When REGION_DATA_BLOB_URL is set (e.g. on App Service), prefer the daily-refreshed
+# blob over the bundled snapshot. Falls back silently to the bundled file otherwise.
+_BLOB_URL = os.environ.get("REGION_DATA_BLOB_URL")
+if _BLOB_URL:
+    _blob_data = _fetch_region_data_from_blob(_BLOB_URL)
+    if _blob_data:
+        ptu_core.set_live_region_data(_blob_data)
 
 st.title("Azure OpenAI PTU Sizing & Architecture Guidance Tool")
 st.caption("Indicative workshop tool for PTU discovery, cost comparison, and architecture recommendations.")

@@ -30,12 +30,39 @@ In the notebook, the same choices are set via the `MODEL_PRESET` / `DEPLOYMENT_T
 
 For a full walkthrough of every input, the sizing formulas, example scenarios, and the official Microsoft Learn references, see the root [README.md](../README.md).
 
-## Refreshing region availability (optional)
+## Refreshing region availability
 
-Region availability is read from `region_data.json` when present, otherwise from
-built-in fallback lists. To regenerate the file with current, authoritative data
-from the Azure Models API (requires `az login` and a subscription with access to
-the model catalog):
+Region availability is read from `region_data.json`. The deployed app loads it in
+this order of preference:
+
+1. **Azure Blob Storage** — when the `REGION_DATA_BLOB_URL` app setting is set, the
+   app fetches the blob at startup using its **managed identity** (cached for one
+   hour). This blob is refreshed automatically every day (see below).
+2. **Bundled snapshot** — the `region_data.json` committed in this folder, used as a
+   fallback whenever the blob is unreachable or the env var is unset.
+
+The public app never uses secrets — both the daily job (write) and the app (read)
+authenticate with Azure AD via managed identity, because the storage account has
+shared-key and public access disabled.
+
+### Automated daily refresh (Azure Container Apps Job)
+
+An Azure Container Apps Job (`ptu-region-refresh`) runs daily at 06:00 UTC. It
+clones this repo, runs [`scripts/refresh_regions.py`](../scripts/refresh_regions.py),
+and uploads the result to the `region-data` blob container. The job definition lives
+in [`scripts/region-refresh-job.yaml`](../scripts/region-refresh-job.yaml). Create or
+update it with:
+
+```bash
+az containerapp job create -n ptu-region-refresh -g ptu-sizing-rg \
+  --yaml scripts/region-refresh-job.yaml
+az containerapp job start -n ptu-region-refresh -g ptu-sizing-rg   # run on demand
+```
+
+### Regenerating locally (optional)
+
+To regenerate the bundled snapshot manually (requires `az login` and a subscription
+with access to the model catalog):
 
 ```bash
 az login
@@ -43,8 +70,8 @@ python scripts/refresh_regions.py            # all physical regions
 python scripts/refresh_regions.py --dry-run   # preview without writing
 ```
 
-It is safe to re-run periodically; commit the updated `region_data.json` so the
-deployed app ships current data. The public app itself never calls Azure.
+It is safe to re-run periodically; commit the updated `region_data.json` so a fresh
+checkout ships current fallback data.
 
 
 ## Important note
