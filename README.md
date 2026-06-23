@@ -35,7 +35,7 @@ Solution engineers, architects, and customers evaluating **PTU vs PAYGO** for pr
 
 From a few workload inputs, it answers the three questions that drive an Azure OpenAI capacity decision:
 
-- **PTU or PAYGO?** — which billing model is cheaper and more predictable for your traffic.
+- **PTU or PAYGO?** — which model better balances cost, predictability, and performance for your traffic.
 - **How many PTUs?** — the baseline to provision, rounded to what you can actually deploy.
 - **Which architecture?** — PTU-first, PTU + Standard spillover, or PAYGO/pilot, based on burstiness.
 
