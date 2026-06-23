@@ -89,6 +89,22 @@ pip install -r requirements.txt
 jupyter notebook PTU_Sizing_Notebook.ipynb
 ```
 
+## Deploying to Azure App Service
+
+A reusable PowerShell script packages the app and deploys it to a Linux Python
+App Service via Oryx build. Requires an active `az login` session and the Azure CLI.
+
+```powershell
+# Redeploy current code to the existing App Service
+./scripts/deploy-appservice.ps1
+
+# Create a new Free-tier (F1) App Service, then deploy
+./scripts/deploy-appservice.ps1 -Provision -AppName <globally-unique-name>
+```
+
+Run it from the repository root. See the script header for all parameters
+(`-ResourceGroup`, `-AppName`, `-PlanName`, `-Location`, `-Provision`).
+
 ## What the tool does
 
 Given workload inputs (average RPM, input/output tokens per request, P95 multiplier, prompt cache rate, etc.) and cost assumptions, the tool:
