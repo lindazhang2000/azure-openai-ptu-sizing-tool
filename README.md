@@ -182,6 +182,8 @@ PTU + spillover  = PTU 1-mo reserved + spillFraction × PAYGO monthly
 
 where `spillFraction` is the time-weighted share of monthly demand above the provisioned PTU capacity. A simple duty cycle is used: for `peakMinutesFraction` of the time demand sits at the P95 level and at the average level the rest of the time, and spill is only counted where demand exceeds capacity in each regime:
 
+> **In plain English:** *spillover* is simply how often your demand runs above what your PTU capacity can serve. Your committed PTUs handle the steady load; anything above that "spills" to pay-as-you-go — and **you only pay PAYGO for those overflow moments**, not all the time. The formula below just measures what fraction of monthly demand lands above the line.
+
 ```
 capacity     = recommendedPTU × modelTpmPerPtu
 spillDemand  = f × max(p95TPM − capacity, 0) + (1 − f) × max(avgTPM − capacity, 0)
