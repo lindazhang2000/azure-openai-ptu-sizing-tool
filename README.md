@@ -10,7 +10,7 @@ An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Uni
 
 Every PTU decision trades off three forces. PTU sits in the middle — you lean toward whichever corner the workload demands:
 
-![PTU decision triangle: Performance at the apex, Cost (pay-as-you-go) and Flexibility (hybrid) as the two base corners, with PTU balancing all three in the center.](PTU_decision_triangle.png)
+<img src="PTU_decision_triangle.png" alt="PTU decision triangle: Performance at the apex, Cost (pay-as-you-go) and Flexibility (hybrid) as the two base corners, with PTU balancing all three in the center." width="420" />
 
 | Corner | What it optimizes for | How it maps to this tool |
 | --- | --- | --- |
