@@ -6,6 +6,30 @@ An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Uni
 >
 > **Customer-safe usage:** Use this for **directional sizing and architecture discussion only**. **Always validate with the official Azure/Foundry PTU calculator and current pricing before any quote, reservation, or capacity commitment.**
 
+## The PTU decision triangle
+
+Every PTU decision trades off three forces. PTU sits in the middle — you lean toward whichever corner the workload demands:
+
+```mermaid
+graph TD
+    P["⚡ Performance<br/>Maximize speed,<br/>throughput &amp; efficiency"]
+    C["💲 Cost — Pay-as-you-go<br/>Optimize spend,<br/>pay only for what you use"]
+    F["☁️ Flexibility — Hybrid<br/>Scale, adapt &amp; modernize<br/>across environments"]
+    PTU(("PTU"))
+    P -. "more performance" .- PTU
+    C -. "more flexibility" .- PTU
+    F -. "more agility" .- PTU
+    P --- C
+    C --- F
+    F --- P
+```
+
+| Corner | What it optimizes for | How it maps to this tool |
+| --- | --- | --- |
+| **Performance** | Speed, throughput, predictable latency under load | Drives the PTU-first recommendation for steady, latency-sensitive workloads. |
+| **Cost (PAYGO)** | Pay only for what you use, no commitment | The PTU-vs-PAYGO comparison and the PAYGO recommendation for spiky/low-baseline traffic. |
+| **Flexibility (Hybrid)** | Scale and adapt across environments | The PTU + spillover pattern: a committed baseline plus elastic Standard overflow. |
+
 ## When to use PTU vs PAYGO
 
 The core decision this tool informs — pick the row that matches the workload's **burstiness** (peak ÷ average load):
