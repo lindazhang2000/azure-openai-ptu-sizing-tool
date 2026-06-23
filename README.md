@@ -7,13 +7,15 @@ products:
 - azure-openai
 - ai-services
 urlFragment: azure-openai-ptu-sizing-tool
-name: Azure OpenAI PTU Sizing & Architecture Guidance Tool
-description: An interactive Streamlit app and Jupyter notebook that estimate Azure OpenAI Provisioned Throughput Unit (PTU) needs and compare PTU vs pay-as-you-go cost.
+name: Azure OpenAI PTU Sizing Tool
+description: An interactive Streamlit app and Jupyter notebook that estimate Azure OpenAI Provisioned Throughput Unit (PTU) needs, compare PTU vs pay-as-you-go cost, and give architecture guidance.
 ---
 
-# Azure OpenAI PTU Sizing & Architecture Guidance Tool
+# Azure OpenAI PTU Sizing Tool
 
-An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs and compare PTU vs PAYGO cost.
+*…with architecture guidance.*
+
+An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs, compare PTU vs PAYGO cost, and recommend an architecture pattern.
 
 > **Disclaimer:** This is an **internal sizing tool**, not the official Azure PTU calculator. The sizing constants are indicative — re-verify model throughput, minimum PTU commit, and pricing against current Azure docs before quoting customer-specific numbers.
 >
