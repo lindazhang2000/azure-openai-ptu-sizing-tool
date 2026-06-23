@@ -124,7 +124,7 @@ Type these into the **Workload inputs**; leave the Advanced and Cost assumptions
 | Average RPM | 30 | 120 | 15 |
 | Avg input tokens / request | 1200 | 2500 | 900 |
 | Avg output tokens / request | 400 | 800 | 300 |
-| P95 load multiplier | 1.5 | 2.8 | 4.5 |
+| P95 load multiplier = burst ratio | 1.5 | 2.8 | 4.5 |
 | Prompt cache rate | 0.30 | 0.20 | 0.10 |
 | Baseline load factor | 0.70 | 0.70 | 0.70 |
 
