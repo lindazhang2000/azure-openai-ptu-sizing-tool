@@ -86,7 +86,7 @@ def _reset_defaults():
 with st.sidebar:
     st.header("Quick actions")
     st.button("Reset to default assumptions", on_click=_reset_defaults)
-    st.markdown("**Note**  \nThis is an internal sizing tool, not the official Azure PTU calculator. Re-verify model throughput, minimums, and pricing against current Azure docs before quoting customer-specific numbers.")
+    st.markdown("**Note**  \nThis tool provides **illustrative and directional guidance only** and is **not an official Azure PTU calculator**. Throughput assumptions, minimum PTU commitments, and pricing are subject to change. Always verify against current Azure documentation before making customer-specific decisions.")
 
 left, right = st.columns([1.25, 0.75], gap="large")
 
