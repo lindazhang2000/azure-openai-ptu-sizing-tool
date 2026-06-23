@@ -1,4 +1,4 @@
-# Azure OpenAI PTU Enablement
+# Azure OpenAI PTU Sizing & Architecture Guidance Tool
 
 An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs and compare PTU vs PAYGO cost.
 

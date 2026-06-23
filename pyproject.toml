@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ptu-sizing"
 version = "0.1.0"
-description = "Azure OpenAI PTU sizing engine with a Streamlit app and Jupyter notebook front-end."
+description = "Azure OpenAI PTU Sizing & Architecture Guidance Tool — a PTU sizing engine with a Streamlit app and Jupyter notebook front-end."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

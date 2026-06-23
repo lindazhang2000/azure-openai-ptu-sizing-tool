@@ -4,9 +4,9 @@ import streamlit as st
 
 from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, paygo_rates, region_supported, spillover_supported
 
-st.set_page_config(page_title="PTU Sizing Tool", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
 
-st.title("PTU Sizing Tool")
+st.title("Azure OpenAI PTU Sizing & Architecture Guidance Tool")
 st.caption("Indicative workshop tool for PTU discovery, cost comparison, and architecture recommendations.")
 
 # Widgets whose defaults are derived from the model preset, deployment type, or

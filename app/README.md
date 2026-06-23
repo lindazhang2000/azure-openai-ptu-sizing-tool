@@ -1,4 +1,4 @@
-# PTU Sizing Tool
+# Azure OpenAI PTU Sizing & Architecture Guidance Tool
 
 This package contains two front-ends over the shared `ptu_core` sizing engine:
 
