@@ -10,18 +10,7 @@ An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Uni
 
 Every PTU decision trades off three forces. PTU sits in the middle — you lean toward whichever corner the workload demands:
 
-```mermaid
-graph TD
-    P["⚡ Performance<br/>Maximize speed,<br/>throughput &amp; efficiency"]
-    PTU(("PTU"))
-    C["💲 Cost — Pay-as-you-go<br/>Optimize spend,<br/>pay only for what you use"]
-    F["☁️ Flexibility — Hybrid<br/>Scale, adapt &amp; modernize<br/>across environments"]
-    P --- PTU
-    PTU --- C
-    PTU --- F
-    P --- C
-    P --- F
-```
+![PTU decision triangle: Performance at the apex, Cost (pay-as-you-go) and Flexibility (hybrid) as the two base corners, with PTU balancing all three in the center.](PTU_decision_triangle.png)
 
 | Corner | What it optimizes for | How it maps to this tool |
 | --- | --- | --- |
