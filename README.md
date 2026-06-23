@@ -85,7 +85,8 @@ The core decision this tool informs — pick the row that matches the workload's
 
 | Path | Contents |
 | --- | --- |
-| [app/](app) | The PTU sizing tool: Streamlit app, notebook, README, and requirements. |
+| [app/](app) | The PTU sizing tool: Streamlit app, notebook, README, requirements, and the bundled `region_data.json` snapshot. |
+| [scripts/](scripts) | Operations: `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` (regenerate region availability from the Azure Models API), and `region-refresh-job.yaml` (the daily Container Apps Job definition). |
 
 ## Running the tool
 
@@ -120,6 +121,45 @@ App Service via Oryx build. Requires an active `az login` session and the Azure 
 
 Run it from the repository root. See the script header for all parameters
 (`-ResourceGroup`, `-AppName`, `-PlanName`, `-Location`, `-Provision`).
+
+## Region data refresh architecture
+
+The **Region** dropdown is backed by `region_data.json`, which is kept current
+automatically — no redeploy needed. A scheduled **Azure Container Apps Job**
+regenerates the data daily and publishes it to **Blob Storage**, and the app reads
+it at runtime. All access is **Microsoft Entra ID (managed identity)** — the storage
+account disables shared-key and public access, so no secrets or SAS are involved.
+
+```mermaid
+flowchart LR
+    subgraph Daily["Container Apps Job — daily 06:00 UTC"]
+        J["ptu-region-refresh<br/>(system-assigned MI)"]
+    end
+    M["Azure Models API<br/>(az cognitiveservices model list)"]
+    B[("Blob Storage<br/>region-data/region_data.json")]
+    A["App Service<br/>Streamlit app (system-assigned MI)"]
+    F["Bundled region_data.json<br/>(fallback)"]
+
+    J -- "Reader (subscription)" --> M
+    J -- "Storage Blob Data Contributor" --> B
+    A -- "Storage Blob Data Reader, cached 1h" --> B
+    B -. "if blob unreachable" .-> F
+    F -.-> A
+```
+
+| Concern | Detail |
+| --- | --- |
+| **Schedule** | Daily at 06:00 UTC (cron `0 6 * * *`), defined in [scripts/region-refresh-job.yaml](scripts/region-refresh-job.yaml). |
+| **Write path** | The job authenticates with its managed identity, runs [scripts/refresh_regions.py](scripts/refresh_regions.py), and uploads the result to the `region-data` container. |
+| **Read path** | The app fetches the blob via `DefaultAzureCredential` when the `REGION_DATA_BLOB_URL` app setting is present (cached one hour), falling back to the snapshot bundled in `app/`. |
+| **Auth** | Entra ID / managed identity only. Job MI needs **Reader** (subscription) + **Storage Blob Data Contributor**; app MI needs **Storage Blob Data Reader**. |
+
+Update or trigger the job on demand:
+
+```bash
+az containerapp job update -n ptu-region-refresh -g ptu-sizing-rg --yaml scripts/region-refresh-job.yaml
+az containerapp job start  -n ptu-region-refresh -g ptu-sizing-rg
+```
 
 ## What the tool does
 
