@@ -15,8 +15,8 @@ description: An interactive Streamlit app and Jupyter notebook that estimate Azu
 
 *…with architecture guidance.*
 
-<!-- Update OWNER to your GitHub org/user (e.g. Azure-Samples) once the repo is pushed. -->
-[![CI](https://github.com/OWNER/azure-openai-ptu-sizing-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/azure-openai-ptu-sizing-tool/actions/workflows/ci.yml)
+<!-- CI status for the published repo. -->
+[![CI](https://github.com/lindazhang2000/azure-openai-ptu-sizing-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/lindazhang2000/azure-openai-ptu-sizing-tool/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs, compare PTU vs PAYGO cost, and recommend an architecture pattern.
