@@ -1,8 +1,8 @@
 # Azure OpenAI PTU Enablement
 
-An interactive **PTU sizing demo** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs and compare PTU vs PAYGO cost.
+An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs and compare PTU vs PAYGO cost.
 
-> **Disclaimer:** This is **indicative demo material**, not the official PTU calculator. Replace model throughput, minimum PTU commit, and pricing assumptions with validated, customer-specific values before any external use.
+> **Disclaimer:** This is an **internal sizing tool**, not the official Azure PTU calculator. The sizing constants are indicative — re-verify model throughput, minimum PTU commit, and pricing against current Azure docs before quoting customer-specific numbers.
 
 ## Repository layout
 
