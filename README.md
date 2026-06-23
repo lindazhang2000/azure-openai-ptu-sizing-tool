@@ -147,7 +147,7 @@ Avoid these to get predictable performance, cost control, and confident scale:
 
 | # | Mistake | Reality | Fix |
 | --- | --- | --- | --- |
-| 1 | Sizing on average instead of peak | PTU is driven by **peak** throughput and token shape | Size for the P95/P99 workload, not the average |
+| 1 | Sizing on the average and ignoring peaks | P95/P99 reveal the burst behavior the average hides | Use P95/P99 to understand peak behavior, but size PTU to the steady-state baseline (let spillover/PAYGO absorb the rest) |
 | 2 | Buying a reservation too early | Reservations are a **billing layer**, not capacity | Start hourly → validate → then reserve |
 | 3 | Ignoring routing & spillover | PTU needs a PAYGO spillover / routing layer for bursts | Design for PTU baseline + burst overflow |
 | 4 | Mixing unrelated workloads | Different workloads = different latency + token patterns | Segment or prioritize via routing / APIM |
