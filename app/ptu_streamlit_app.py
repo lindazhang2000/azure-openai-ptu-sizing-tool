@@ -2,7 +2,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, paygo_rates, region_supported, spillover_supported
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, paygo_rates, region_data_source, region_supported, spillover_supported
 
 st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
 
@@ -60,7 +60,7 @@ def compute_defaults(selected_model, deployment_type, foundry_mode):
 
 
 _INITIAL_MODEL = "gpt-4.1"
-_INITIAL_DEPLOYMENT = available_deployment_types(MODEL_PRESETS.get(_INITIAL_MODEL, {}))[0]
+_INITIAL_DEPLOYMENT = available_deployment_types(MODEL_PRESETS.get(_INITIAL_MODEL, {}), _INITIAL_MODEL)[0]
 
 if "_prev_controls" not in st.session_state:
     for _k, _v in compute_defaults(_INITIAL_MODEL, _INITIAL_DEPLOYMENT, False).items():
@@ -101,7 +101,7 @@ with left:
     )
     preset = MODEL_PRESETS.get(selected_model, {})
 
-    deployment_options = available_deployment_types(preset)
+    deployment_options = available_deployment_types(preset, selected_model)
     if st.session_state["deployment_type"] not in deployment_options:
         st.session_state["deployment_type"] = deployment_options[0]
     deployment_type = st.selectbox(
@@ -119,16 +119,25 @@ with left:
     _region_choices = region_options if region_options else ["(none listed)"]
     if st.session_state["region"] not in _region_choices:
         st.session_state["region"] = _region_choices[0]
+    _region_src, _region_asof = region_data_source()
+    _region_label = "Region (live)" if _region_src == "live" else "Region (indicative)"
     region = st.selectbox(
-        "Region (indicative)",
+        _region_label,
         _region_choices,
         key="region",
-        help="Indicative subset of Azure regions where this model + deployment type is offered for provisioned throughput. Global routes across regions; Data Zone stays within the US/EU zone; Regional pins to a single region. Availability changes frequently — always confirm against the live Microsoft Learn region tables.",
+        help="Azure regions where this model + deployment type is offered for provisioned throughput. When live data is loaded (region_data.json), this comes straight from the Azure Models API; otherwise it is an indicative built-in subset. Global routes across regions; Data Zone stays within the US/EU zone; Regional pins to a single region. Availability changes frequently — confirm against the live Microsoft Learn region tables.",
     )
-    if region_options:
-        st.caption(f"{len(region_options)} indicative region(s) for {selected_model} · {deployment_type}. Verify against the live region tables before deployment.")
+    if _region_src == "live":
+        _asof = (_region_asof or "")[:10]
+        if region_options:
+            st.caption(f"✅ {len(region_options)} region(s) for {selected_model} · {deployment_type} — live from Azure Models API (refreshed {_asof}).")
+        else:
+            st.caption(f"⚠️ {selected_model} · {deployment_type} not offered per the Azure Models API (refreshed {_asof}). Try another deployment type or region.")
     else:
-        st.caption(f"No indicative regions listed for {selected_model} · {deployment_type}. Confirm availability in the Microsoft Learn region tables.")
+        if region_options:
+            st.caption(f"{len(region_options)} indicative region(s) for {selected_model} · {deployment_type}. Verify against the live region tables before deployment.")
+        else:
+            st.caption(f"No indicative regions listed for {selected_model} · {deployment_type}. Confirm availability in the Microsoft Learn region tables.")
 
     foundry_mode = st.checkbox(
         "Match Foundry calculator (size for peak, no buffer)",

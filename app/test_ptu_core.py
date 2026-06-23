@@ -2,6 +2,7 @@ import math
 
 import pytest
 
+import ptu_core
 from ptu_core import (
     DEFAULTS,
     DEPLOYMENT_PRICING,
@@ -287,14 +288,26 @@ def test_spillover_flag_does_not_change_non_spillover_recommendations():
     assert steady_regional["architecture"]["label"] == "PTU-first production baseline"
 
 
-def test_available_regions_empty_for_unsupported_deployment_type():
-    # gpt-5.2 is Global only, so it has no Data Zone or Regional regions.
+@pytest.fixture
+def static_regions(monkeypatch):
+    """Force the built-in fallback region lists (no live region_data.json).
+
+    The static-fallback region assertions below must be deterministic whether or
+    not a developer has run scripts/refresh_regions.py, so disable the live
+    override for these tests.
+    """
+    monkeypatch.setattr(ptu_core, "_LIVE_REGION_DATA", None)
+
+
+def test_available_regions_empty_for_unsupported_deployment_type(static_regions):
+    # In the static fallback, gpt-5.2 is Global only, so it has no Data Zone or
+    # Regional regions. (Live data may differ and is covered separately.)
     assert available_regions("gpt-5.2", "Data Zone") == []
     assert available_regions("gpt-5.2", "Regional") == []
     assert available_regions("gpt-5.2", "Global")  # non-empty
 
 
-def test_data_zone_regions_are_us_and_eu_only():
+def test_data_zone_regions_are_us_and_eu_only(static_regions):
     # Data Zone provisioned stays in US/EU zones — no APAC regions like australiaeast.
     regions = available_regions("gpt-4.1", "Data Zone")
     assert "eastus" in regions
@@ -303,7 +316,7 @@ def test_data_zone_regions_are_us_and_eu_only():
     assert "japaneast" not in regions
 
 
-def test_region_supported_checks_indicative_list():
+def test_region_supported_checks_indicative_list(static_regions):
     assert region_supported("gpt-4.1", "Data Zone", "eastus") is True
     assert region_supported("gpt-4.1", "Data Zone", "australiaeast") is False
     assert region_supported("gpt-4.1", "Global", "eastus2") is True
@@ -311,11 +324,40 @@ def test_region_supported_checks_indicative_list():
     assert region_supported("gpt-5.2", "Regional", "eastus2") is False
 
 
-def test_regional_regions_are_model_specific_with_fallback():
+def test_regional_regions_are_model_specific_with_fallback(static_regions):
     # Known model uses its curated list; an unmapped (Custom) model uses the fallback.
     assert "eastus2" in available_regions("gpt-4.1", "Regional")
     fallback = available_regions("Custom", "Regional")
     assert fallback == ["eastus", "eastus2", "westus", "westus3"]
+
+
+def test_live_region_data_overrides_static(monkeypatch):
+    # When region_data.json is loaded, it is authoritative for both the
+    # available deployment types and the region lists.
+    fake = {
+        "generated_utc": "2026-06-23T00:00:00+00:00",
+        "models": {
+            "gpt-5.2": {
+                "Global": ["eastus2", "swedencentral"],
+                "Data Zone": ["eastus2"],
+            }
+        },
+    }
+    monkeypatch.setattr(ptu_core, "_LIVE_REGION_DATA", fake)
+
+    # Live data says gpt-5.2 now offers Data Zone (the static fallback did not).
+    assert available_regions("gpt-5.2", "Data Zone") == ["eastus2"]
+    assert available_regions("gpt-5.2", "Global") == ["eastus2", "swedencentral"]
+    # A deployment type absent from live data yields no regions.
+    assert available_regions("gpt-5.2", "Regional") == []
+    # Deployment types are driven by live data, in canonical order.
+    assert available_deployment_types(MODEL_PRESETS["gpt-5.2"], "gpt-5.2") == ["Global", "Data Zone"]
+    # region_data_source reports the live provenance.
+    assert ptu_core.region_data_source() == ("live", "2026-06-23T00:00:00+00:00")
+
+
+def test_region_data_source_static_without_live_data(static_regions):
+    assert ptu_core.region_data_source() == ("static", None)
 
 
 def test_openai_presets_carry_confirmed_global_paygo_rates():
