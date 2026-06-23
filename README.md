@@ -25,6 +25,16 @@ An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Uni
 
 Solution engineers, architects, and customers evaluating **PTU vs PAYGO** for production AI workloads.
 
+## What this tool helps decide
+
+From a few workload inputs, it answers the three questions that drive an Azure OpenAI capacity decision:
+
+- **PTU or PAYGO?** — which billing model is cheaper and more predictable for your traffic.
+- **How many PTUs?** — the baseline to provision, rounded to what you can actually deploy.
+- **Which architecture?** — PTU-first, PTU + Standard spillover, or PAYGO/pilot, based on burstiness.
+
+Everything below the next two sections is reference depth — read it when you need the formulas, assumptions, and worked scenarios.
+
 ## The PTU decision triangle
 
 Every PTU decision trades off three forces. PTU sits in the middle — you lean toward whichever corner the workload demands:
