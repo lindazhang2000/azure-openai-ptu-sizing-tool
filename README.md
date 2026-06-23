@@ -3,6 +3,8 @@
 An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs and compare PTU vs PAYGO cost.
 
 > **Disclaimer:** This is an **internal sizing tool**, not the official Azure PTU calculator. The sizing constants are indicative — re-verify model throughput, minimum PTU commit, and pricing against current Azure docs before quoting customer-specific numbers.
+>
+> **Customer-safe usage:** Use this for **directional sizing and architecture discussion only**. **Always validate with the official Azure/Foundry PTU calculator and current pricing before any quote, reservation, or capacity commitment.**
 
 ## When to use PTU vs PAYGO
 
