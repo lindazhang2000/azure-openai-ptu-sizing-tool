@@ -10,10 +10,7 @@ st.title("PTU Sizing Tool")
 st.caption("Indicative workshop tool for PTU discovery, cost comparison, and architecture recommendations.")
 
 with st.sidebar:
-    st.header("Quick actions")
-    if st.button("Reset to default assumptions"):
-        for k, v in DEFAULTS.items():
-            st.session_state[k] = v
+    st.header("About")
     st.markdown("**Note**  \nThis is an internal sizing tool, not the official Azure PTU calculator. Re-verify model throughput, minimums, and pricing against current Azure docs before quoting customer-specific numbers.")
 
 left, right = st.columns([1.25, 0.75], gap="large")
