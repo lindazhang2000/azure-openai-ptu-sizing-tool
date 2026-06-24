@@ -40,11 +40,12 @@ import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 
 # Azure Monitor metric names (namespace microsoft.cognitiveservices/accounts) and
 # the friendly column names used in the report / CSV. These are the canonical
 # Azure OpenAI token metrics; ``TokenTransaction`` is the total (prompt + generated)
-# "Processed Inference Tokens" counter.
+# inference-token counter.
 _TOKEN_METRICS = {
     "ProcessedPromptTokens": "prompt_tokens",
     "GeneratedTokens": "generated_tokens",
@@ -170,7 +171,7 @@ def _interval_minutes(iso: str) -> float:
     return days * 1440 + hours * 60 + mins + secs / 60
 
 
-def _az(args: list[str]) -> object:
+def _az(args: list[str]) -> Any:
     """Run an `az` CLI command and return parsed JSON, or raise on failure."""
     cmd = ["az", *args, "-o", "json"]
     proc = subprocess.run(
@@ -320,7 +321,7 @@ def _fetch_account_usage(
     series_by_dep: dict[str, dict[str, float]] = {}
     for metric in resp.get("value") or []:
         metric_name = (metric.get("name") or {}).get("value")
-        column = _TOKEN_METRICS.get(metric_name)
+        column = _TOKEN_METRICS.get(metric_name) if metric_name else None
         if not column:
             continue
         for ts in metric.get("timeseries") or []:
