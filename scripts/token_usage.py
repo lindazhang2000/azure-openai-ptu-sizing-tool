@@ -6,11 +6,14 @@ metrics from Azure Monitor, split by **deployment** and **model**:
 
     * ProcessedPromptTokens     -> input / prompt tokens
     * GeneratedTokens           -> output / completion tokens
-    * ProcessedInferenceTokens  -> total inference tokens (input + output)
+    * TokenTransaction          -> total inference tokens (input + output)
 
 The result is aggregated as subscription -> account -> deployment -> model and
-printed as a readable table. Optionally write the full breakdown to JSON
-(``--json``) and/or a flat CSV (``--csv``) for spreadsheets / dashboards.
+printed as a readable table. It also reports **peak demand** — the busiest time
+bucket (per ``--interval``, hourly by default) for each deployment, account, and
+the subscription as a whole, with the peak tokens/minute rate (useful for PTU
+sizing). Optionally write the full breakdown to JSON (``--json``) and/or a flat
+CSV (``--csv``) for spreadsheets / dashboards.
 
 This is a *developer/ops* reporting tool — it needs Azure credentials
 (``az login``) and at least **Monitoring Reader** (or Reader) on the accounts.
@@ -18,8 +21,9 @@ Platform metrics are retained ~93 days, so pick a start time within that window.
 
 Usage:
     az login
-    python scripts/token_usage.py                      # last 30 days, active sub
+    python scripts/token_usage.py                      # last 30 days, hourly peaks
     python scripts/token_usage.py --days 7             # last 7 days
+    python scripts/token_usage.py --interval PT5M      # finer peak resolution
     python scripts/token_usage.py --subscription <id>  # a specific subscription
     python scripts/token_usage.py --json usage.json --csv usage.csv
     python scripts/token_usage.py --start 2026-06-01T00:00:00Z --end 2026-06-15T00:00:00Z
@@ -32,6 +36,7 @@ import csv
 import datetime as _dt
 import json
 import os
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -52,6 +57,20 @@ _TOKEN_METRICS = {
 _DIM_DEPLOYMENT = "ModelDeploymentName"
 
 _UNKNOWN = "(unknown)"
+
+# The metric used for peak-demand analysis (total tokens per time bucket).
+_PEAK_COLUMN = "total_tokens"
+
+
+def _interval_minutes(iso: str) -> float:
+    """Convert an ISO 8601 duration (e.g. PT1H, PT5M, P1D) to minutes; 0 if unknown."""
+    m = re.fullmatch(
+        r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?", (iso or "").strip()
+    )
+    if not m:
+        return 0.0
+    days, hours, mins, secs = (int(x) if x else 0 for x in m.groups())
+    return days * 1440 + hours * 60 + mins + secs / 60
 
 
 def _az(args: list[str]) -> object:
@@ -163,8 +182,12 @@ def _fetch_account_usage(
     end: str,
     interval: str,
     subscription: str | None,
-) -> tuple[dict, dict]:
-    """Return (account, {deployment: {"model","version","totals"}}) for one account.
+) -> tuple[dict, dict, dict]:
+    """Return (account, deployments, account_series) for one account.
+
+    ``deployments`` maps deployment name -> {"model","version","totals","peak"};
+    ``account_series`` maps timestamp -> total tokens summed across deployments
+    (used to compute account- and subscription-level peak demand).
 
     Token metrics are split by deployment (the only supported model-ish dimension),
     then each deployment is joined to its model name/version from the deployment
@@ -190,10 +213,13 @@ def _fetch_account_usage(
         resp = _az(args) or {}
     except (RuntimeError, json.JSONDecodeError) as exc:
         print(f"  ! {account['name']}: {exc}", file=sys.stderr)
-        return account, {}
+        return account, {}, {}
 
-    # counts_by_dep[deployment] -> counts
+    # counts_by_dep[deployment] -> counts ; peak_by_dep[deployment] -> (tokens, time)
+    # account_series[timestamp] -> total tokens summed across all deployments
     counts_by_dep: dict[str, dict[str, float]] = {}
+    peak_by_dep: dict[str, tuple[float, str]] = {}
+    account_series: dict[str, float] = {}
     for metric in resp.get("value") or []:
         metric_name = (metric.get("name") or {}).get("value")
         column = _TOKEN_METRICS.get(metric_name)
@@ -201,20 +227,35 @@ def _fetch_account_usage(
             continue
         for ts in metric.get("timeseries") or []:
             deployment = _dim_value(ts.get("metadatavalues") or [], _DIM_DEPLOYMENT)
-            total = sum(point.get("total") or 0.0 for point in (ts.get("data") or []))
+            points = ts.get("data") or []
+            total = sum(point.get("total") or 0.0 for point in points)
             if total <= 0:
                 continue
             counts_by_dep.setdefault(deployment, _empty_counts())[column] += total
 
+            # Peak demand is tracked on the total-tokens metric only.
+            if column == _PEAK_COLUMN:
+                best_val, best_time = peak_by_dep.get(deployment, (0.0, ""))
+                for point in points:
+                    val = point.get("total") or 0.0
+                    stamp = point.get("timeStamp") or point.get("timestamp") or ""
+                    if val > best_val:
+                        best_val, best_time = val, stamp
+                    if val > 0:
+                        account_series[stamp] = account_series.get(stamp, 0.0) + val
+                peak_by_dep[deployment] = (best_val, best_time)
+
     deployments: dict[str, dict] = {}
     for dep_name, counts in counts_by_dep.items():
         info = model_map.get(dep_name, {})
+        peak_val, peak_time = peak_by_dep.get(dep_name, (0.0, ""))
         deployments[dep_name] = {
             "model": info.get("model", _UNKNOWN),
             "version": info.get("version", _UNKNOWN),
             "totals": counts,
+            "peak": {"tokens": peak_val, "time": peak_time},
         }
-    return account, deployments
+    return account, deployments, account_series
 
 
 def _sum_counts(target: dict[str, float], source: dict[str, float]) -> None:
@@ -233,6 +274,7 @@ def collect_usage(
     """Query every account in parallel and assemble the full usage breakdown."""
     accounts_out: list[dict] = []
     grand_total = _empty_counts()
+    global_series: dict[str, float] = {}
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
@@ -241,7 +283,7 @@ def collect_usage(
         }
         done = 0
         for fut in as_completed(futures):
-            account, deployments = fut.result()
+            account, deployments, account_series = fut.result()
             done += 1
             print(
                 f"  [{done}/{len(accounts)}] {account['name']}: {len(deployments)} deployment(s)"
@@ -253,13 +295,20 @@ def collect_usage(
             for dep_name in sorted(deployments):
                 dep = deployments[dep_name]
                 counts = dep["totals"]
+                peak = dep.get("peak") or {"tokens": 0.0, "time": ""}
                 dep_out[dep_name] = {
                     "model": dep["model"],
                     "version": dep["version"],
                     "totals": {k: round(v) for k, v in counts.items()},
+                    "peak": {"tokens": round(peak["tokens"]), "time": peak["time"]},
                 }
                 _sum_counts(account_total, counts)
                 _sum_counts(model_totals.setdefault(dep["model"], _empty_counts()), counts)
+
+            # Account peak = busiest bucket across all of its deployments.
+            acc_peak_time, acc_peak_val = _peak_of_series(account_series)
+            for stamp, val in account_series.items():
+                global_series[stamp] = global_series.get(stamp, 0.0) + val
 
             accounts_out.append(
                 {
@@ -270,18 +319,30 @@ def collect_usage(
                         for m, c in sorted(model_totals.items())
                     },
                     "totals": {k: round(v) for k, v in account_total.items()},
+                    "peak": {"tokens": round(acc_peak_val), "time": acc_peak_time},
                 }
             )
             _sum_counts(grand_total, account_total)
 
     accounts_out.sort(key=lambda a: a["name"] or "")
+    sub_peak_time, sub_peak_val = _peak_of_series(global_series)
     return {
         "generated_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
         "period": {"start": start, "end": end, "interval": interval},
+        "interval_minutes": _interval_minutes(interval),
         "metrics": list(_TOKEN_METRICS.keys()),
         "accounts": accounts_out,
         "totals": {k: round(v) for k, v in grand_total.items()},
+        "peak": {"tokens": round(sub_peak_val), "time": sub_peak_time},
     }
+
+
+def _peak_of_series(series: dict[str, float]) -> tuple[str, float]:
+    """Return (timestamp, value) of the largest bucket in a timestamp->value map."""
+    if not series:
+        return "", 0.0
+    stamp, val = max(series.items(), key=lambda kv: kv[1])
+    return stamp, val
 
 
 def _fmt(n: float) -> str:
@@ -320,19 +381,71 @@ def print_summary(report: dict) -> None:
     print("\n" + "=" * 96)
     print(f"{'SUBSCRIPTION TOTAL':48}" + "".join(f"{_fmt(gt.get(c, 0)):>16}" for c in cols))
 
+    _print_peak_section(report)
+
+
+def _fmt_peak_time(stamp: str) -> str:
+    """Trim an ISO timestamp to 'YYYY-MM-DD HH:MM' for display."""
+    if not stamp:
+        return "(n/a)"
+    return stamp.replace("T", " ")[:16]
+
+
+def _print_peak_section(report: dict) -> None:
+    """Print a focused peak-demand section (busiest bucket per the interval)."""
+    period = report["period"]
+    minutes = report.get("interval_minutes") or _interval_minutes(period["interval"])
+
+    def rate(tokens: float) -> str:
+        return f"~{_fmt(tokens / minutes)}/min" if minutes else "n/a"
+
+    print("\n" + "=" * 96)
+    print(f"Peak demand  (busiest single {period['interval']} bucket; total tokens)")
+    print("-" * 96)
+    if not report["accounts"]:
+        print("  (no accounts)")
+        return
+
+    for acc in report["accounts"]:
+        print(f"\n{acc['name']}")
+        for dep_name, dep in acc["deployments"].items():
+            peak = dep.get("peak") or {}
+            tokens = peak.get("tokens", 0)
+            label = f"  {dep_name}  ({dep['model']}:{dep['version']})"
+            print(
+                f"{label:50}{_fmt(tokens):>14}  {rate(tokens):>14}  at {_fmt_peak_time(peak.get('time', ''))}"
+            )
+        ap = acc.get("peak") or {}
+        print(
+            f"{'  => account peak (all deployments)':50}{_fmt(ap.get('tokens', 0)):>14}"
+            f"  {rate(ap.get('tokens', 0)):>14}  at {_fmt_peak_time(ap.get('time', ''))}"
+        )
+
+    sp = report.get("peak") or {}
+    print("\n" + "-" * 96)
+    print(
+        f"{'SUBSCRIPTION PEAK':50}{_fmt(sp.get('tokens', 0)):>14}"
+        f"  {rate(sp.get('tokens', 0)):>14}  at {_fmt_peak_time(sp.get('time', ''))}"
+    )
+
 
 def write_csv(report: dict, path: str) -> None:
     """Write a flat, one-row-per-(account, deployment) CSV with the model joined in."""
     cols = list(_TOKEN_METRICS.values())
+    minutes = report.get("interval_minutes") or _interval_minutes(report["period"]["interval"])
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(
             ["account", "resource_group", "location", "kind",
-             "deployment", "model", "model_version", *cols]
+             "deployment", "model", "model_version", *cols,
+             "peak_total_tokens", "peak_tokens_per_min", "peak_time"]
         )
         for acc in report["accounts"]:
             for dep_name, dep in acc["deployments"].items():
                 t = dep["totals"]
+                peak = dep.get("peak") or {}
+                peak_tokens = int(round(peak.get("tokens", 0)))
+                peak_per_min = round(peak_tokens / minutes, 1) if minutes else ""
                 writer.writerow(
                     [
                         acc["name"],
@@ -343,6 +456,9 @@ def write_csv(report: dict, path: str) -> None:
                         dep.get("model"),
                         dep.get("version"),
                         *(int(round(t.get(c, 0))) for c in cols),
+                        peak_tokens,
+                        peak_per_min,
+                        peak.get("time", ""),
                     ]
                 )
 
@@ -359,8 +475,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", help="Start time, ISO 8601 UTC (e.g. 2026-06-01T00:00:00Z).")
     parser.add_argument("--end", help="End time, ISO 8601 UTC (default: now).")
     parser.add_argument(
-        "--interval", default="P1D",
-        help="Metric granularity (ISO 8601 duration, default P1D). Totals are summed across buckets.",
+        "--interval", default="PT1H",
+        help="Metric granularity (ISO 8601 duration, default PT1H). Totals are summed "
+             "across buckets; peak demand is the busiest single bucket of this size.",
     )
     parser.add_argument("--json", dest="json_path", help="Write the full breakdown to this JSON file.")
     parser.add_argument("--csv", dest="csv_path", help="Write a flat per-model CSV to this file.")
