@@ -161,6 +161,31 @@ az containerapp job update -n ptu-region-refresh -g ptu-sizing-rg --yaml scripts
 az containerapp job start  -n ptu-region-refresh -g ptu-sizing-rg
 ```
 
+## Token usage reporting
+
+[scripts/token_usage.py](scripts/token_usage.py) is an ops helper that pulls actual
+token consumption from **Azure Monitor** for every Azure OpenAI / AI Services account
+in a subscription, broken down **per deployment** and **per model**. It needs Azure
+credentials (`az login`) and at least **Monitoring Reader** (or Reader) on the accounts.
+
+```bash
+az login
+python scripts/token_usage.py                      # last 30 days, hourly peaks
+python scripts/token_usage.py --days 7             # last 7 days
+python scripts/token_usage.py --interval PT5M      # finer peak resolution
+python scripts/token_usage.py --json usage.json --csv usage.csv
+```
+
+It prints two sections: **Token usage** (totals for the period) and **Peak demand**
+(the busiest single time bucket per deployment, account, and the whole subscription,
+with a tokens/min rate and timestamp).
+
+> **Interval trade-off — pick a fine `--interval` when sizing PTUs.** Peak demand is
+> only as sharp as the bucket it's measured in. A burst that reads as `~487/min` at
+> `PT1H` can be `~3,150/min` at `PT5M` — roughly 6× higher — because the hourly bucket
+> averages the spike away. Size PTU capacity against the **fine-grained peak
+> tokens/min**, not the period average, or you will under-provision for real bursts.
+
 ## What the tool does
 
 Given workload inputs (average RPM, input/output tokens per request, P95 multiplier, prompt cache rate, etc.) and cost assumptions, the tool:
