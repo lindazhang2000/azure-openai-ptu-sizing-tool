@@ -183,11 +183,12 @@ def _fetch_account_usage(
     interval: str,
     subscription: str | None,
 ) -> tuple[dict, dict, dict]:
-    """Return (account, deployments, account_series) for one account.
+    """Return (account, deployments, series_by_dep) for one account.
 
     ``deployments`` maps deployment name -> {"model","version","totals","peak"};
-    ``account_series`` maps timestamp -> total tokens summed across deployments
-    (used to compute account- and subscription-level peak demand).
+    ``series_by_dep`` maps deployment name -> {timestamp: total tokens}. Callers
+    merge those per-deployment series (by model, account, or subscription) to find
+    the concurrent peak demand of whatever set is merged.
 
     Token metrics are split by deployment (the only supported model-ish dimension),
     then each deployment is joined to its model name/version from the deployment
@@ -215,11 +216,11 @@ def _fetch_account_usage(
         print(f"  ! {account['name']}: {exc}", file=sys.stderr)
         return account, {}, {}
 
-    # counts_by_dep[deployment] -> counts ; peak_by_dep[deployment] -> (tokens, time)
-    # account_series[timestamp] -> total tokens summed across all deployments
+    # counts_by_dep[deployment] -> counts ; series_by_dep[deployment] -> {timestamp: total}
+    # The per-deployment timestamp series lets callers merge by model / account / sub
+    # to find concurrent peaks (busiest bucket across whatever set is merged).
     counts_by_dep: dict[str, dict[str, float]] = {}
-    peak_by_dep: dict[str, tuple[float, str]] = {}
-    account_series: dict[str, float] = {}
+    series_by_dep: dict[str, dict[str, float]] = {}
     for metric in resp.get("value") or []:
         metric_name = (metric.get("name") or {}).get("value")
         column = _TOKEN_METRICS.get(metric_name)
@@ -235,27 +236,24 @@ def _fetch_account_usage(
 
             # Peak demand is tracked on the total-tokens metric only.
             if column == _PEAK_COLUMN:
-                best_val, best_time = peak_by_dep.get(deployment, (0.0, ""))
+                series = series_by_dep.setdefault(deployment, {})
                 for point in points:
                     val = point.get("total") or 0.0
                     stamp = point.get("timeStamp") or point.get("timestamp") or ""
-                    if val > best_val:
-                        best_val, best_time = val, stamp
                     if val > 0:
-                        account_series[stamp] = account_series.get(stamp, 0.0) + val
-                peak_by_dep[deployment] = (best_val, best_time)
+                        series[stamp] = series.get(stamp, 0.0) + val
 
     deployments: dict[str, dict] = {}
     for dep_name, counts in counts_by_dep.items():
         info = model_map.get(dep_name, {})
-        peak_val, peak_time = peak_by_dep.get(dep_name, (0.0, ""))
+        peak_time, peak_val = _peak_of_series(series_by_dep.get(dep_name, {}))
         deployments[dep_name] = {
             "model": info.get("model", _UNKNOWN),
             "version": info.get("version", _UNKNOWN),
             "totals": counts,
             "peak": {"tokens": peak_val, "time": peak_time},
         }
-    return account, deployments, account_series
+    return account, deployments, series_by_dep
 
 
 def _sum_counts(target: dict[str, float], source: dict[str, float]) -> None:
@@ -283,7 +281,7 @@ def collect_usage(
         }
         done = 0
         for fut in as_completed(futures):
-            account, deployments, account_series = fut.result()
+            account, deployments, series_by_dep = fut.result()
             done += 1
             print(
                 f"  [{done}/{len(accounts)}] {account['name']}: {len(deployments)} deployment(s)"
@@ -291,6 +289,8 @@ def collect_usage(
 
             account_total = _empty_counts()
             model_totals: dict[str, dict[str, float]] = {}
+            model_series: dict[str, dict[str, float]] = {}
+            account_series: dict[str, float] = {}
             dep_out: dict[str, dict] = {}
             for dep_name in sorted(deployments):
                 dep = deployments[dep_name]
@@ -304,9 +304,18 @@ def collect_usage(
                 }
                 _sum_counts(account_total, counts)
                 _sum_counts(model_totals.setdefault(dep["model"], _empty_counts()), counts)
+                # Merge this deployment's timestamp series into its model and the account.
+                dep_series = series_by_dep.get(dep_name, {})
+                _merge_series(model_series.setdefault(dep["model"], {}), dep_series)
+                _merge_series(account_series, dep_series)
 
-            # Account peak = busiest bucket across all of its deployments.
+            # Account peak = busiest bucket across all of its deployments; a model
+            # peak merges only the deployments serving that model (concurrent demand).
             acc_peak_time, acc_peak_val = _peak_of_series(account_series)
+            model_peaks: dict[str, dict] = {}
+            for model, series in model_series.items():
+                mp_time, mp_val = _peak_of_series(series)
+                model_peaks[model] = {"tokens": round(mp_val), "time": mp_time}
             for stamp, val in account_series.items():
                 global_series[stamp] = global_series.get(stamp, 0.0) + val
 
@@ -318,6 +327,7 @@ def collect_usage(
                         m: {k: round(v) for k, v in c.items()}
                         for m, c in sorted(model_totals.items())
                     },
+                    "model_peaks": {m: model_peaks[m] for m in sorted(model_peaks)},
                     "totals": {k: round(v) for k, v in account_total.items()},
                     "peak": {"tokens": round(acc_peak_val), "time": acc_peak_time},
                 }
@@ -343,6 +353,12 @@ def _peak_of_series(series: dict[str, float]) -> tuple[str, float]:
         return "", 0.0
     stamp, val = max(series.items(), key=lambda kv: kv[1])
     return stamp, val
+
+
+def _merge_series(target: dict[str, float], source: dict[str, float]) -> None:
+    """Add a {timestamp: value} series into target in place (concurrent totals)."""
+    for stamp, val in source.items():
+        target[stamp] = target.get(stamp, 0.0) + val
 
 
 def _fmt(n: float) -> str:
@@ -415,6 +431,18 @@ def _print_peak_section(report: dict) -> None:
             print(
                 f"{label:50}{_fmt(tokens):>14}  {rate(tokens):>14}  at {_fmt_peak_time(peak.get('time', ''))}"
             )
+        # Per-model concurrent peak, only when a model is spread over >1 deployment
+        # (otherwise it just repeats that single deployment's peak).
+        model_dep_count: dict[str, int] = {}
+        for dep in acc["deployments"].values():
+            model_dep_count[dep["model"]] = model_dep_count.get(dep["model"], 0) + 1
+        for model, mpeak in (acc.get("model_peaks") or {}).items():
+            if model_dep_count.get(model, 0) > 1:
+                mt = mpeak.get("tokens", 0)
+                print(
+                    f"{'  ~ model peak: ' + model:50}{_fmt(mt):>14}"
+                    f"  {rate(mt):>14}  at {_fmt_peak_time(mpeak.get('time', ''))}"
+                )
         ap = acc.get("peak") or {}
         print(
             f"{'  => account peak (all deployments)':50}{_fmt(ap.get('tokens', 0)):>14}"
