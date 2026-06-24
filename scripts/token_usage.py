@@ -27,6 +27,7 @@ Usage:
     python scripts/token_usage.py --subscription <id>  # a specific subscription
     python scripts/token_usage.py --json usage.json --csv usage.csv
     python scripts/token_usage.py --start 2026-06-01T00:00:00Z --end 2026-06-15T00:00:00Z
+    python scripts/token_usage.py --demo               # synthetic data, no Azure needed
 """
 
 from __future__ import annotations
@@ -366,15 +367,22 @@ def collect_usage(
     interval: str,
     subscription: str | None,
     workers: int = 8,
+    fetch: Any = None,
 ) -> dict:
-    """Query every account in parallel and assemble the full usage breakdown."""
+    """Query every account in parallel and assemble the full usage breakdown.
+
+    ``fetch`` is the per-account collector (defaults to the live Azure Monitor
+    query); the demo mode injects a synthetic one so the report can be produced
+    without any Azure calls.
+    """
+    fetch = fetch or _fetch_account_usage
     accounts_out: list[dict] = []
     grand_total = _empty_counts()
     global_series: dict[str, float] = {}
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(_fetch_account_usage, acc, start, end, interval, subscription): acc
+            pool.submit(fetch, acc, start, end, interval, subscription): acc
             for acc in accounts
         }
         done = 0
@@ -563,7 +571,7 @@ def _print_peak_section(report: dict, ptu_hint: bool = False) -> None:
         print(
             "\n  PTU hint: baseline PTU to cover each deployment's observed peak "
             f"({period['interval']} bucket), output tokens weighted per model.\n"
-            "  Directional only \u2014 validate in the sizing tool; '*generic' = no model preset matched."
+            "  Directional only -- validate in the sizing tool; '*generic' = no model preset matched."
         )
 
 
@@ -604,6 +612,118 @@ def write_csv(report: dict, path: str, ptu_hint: bool = False) -> None:
                 writer.writerow(row)
 
 
+# ---------------------------------------------------------------------------
+# Demo mode — synthetic data so the tool can be recorded / explored with no
+# Azure subscription, credentials, or live token data exposed. The numbers are
+# deterministic (driven only by the requested time window) so recordings are
+# reproducible.
+# ---------------------------------------------------------------------------
+
+# Two pretend accounts. The first hosts two gpt-4.1 deployments so the per-model
+# concurrent-peak line shows up; the second is a separate region/kind. Each
+# deployment carries a synthetic load profile (per-minute token rates).
+_DEMO_ACCOUNTS = [
+    {
+        "name": "contoso-chat-eastus2",
+        "kind": "AIServices",
+        "resourceGroup": "demo-rg",
+        "location": "eastus2",
+        "deployments": [
+            {"name": "gpt-41-chat", "model": "gpt-4.1", "version": "2025-04-14",
+             "base": 300.0, "amp": 260.0, "burst": 650.0, "gen_frac": 0.45},
+            {"name": "gpt-41-batch", "model": "gpt-4.1", "version": "2025-04-14",
+             "base": 120.0, "amp": 90.0, "burst": 120.0, "gen_frac": 0.70},
+            {"name": "gpt-4o-mini", "model": "gpt-4o-mini", "version": "2024-07-18",
+             "base": 200.0, "amp": 150.0, "burst": 240.0, "gen_frac": 0.40},
+        ],
+    },
+    {
+        "name": "contoso-edge-westus",
+        "kind": "OpenAI",
+        "resourceGroup": "demo-rg",
+        "location": "westus",
+        "deployments": [
+            {"name": "gpt-41-prod", "model": "gpt-4.1", "version": "2025-04-14",
+             "base": 280.0, "amp": 230.0, "burst": 520.0, "gen_frac": 0.50},
+        ],
+    },
+]
+
+
+def _demo_buckets(start: str, end: str, interval: str) -> tuple[list[str], float]:
+    """Enumerate ISO bucket-start timestamps from start to end, stepping by interval."""
+    minutes = _interval_minutes(interval) or 60.0
+    now = _dt.datetime.now(_dt.timezone.utc)
+    t0 = _parse_iso(start) or (now - _dt.timedelta(days=1))
+    t1 = _parse_iso(end) or now
+    step = _dt.timedelta(minutes=minutes)
+    stamps: list[str] = []
+    t = t0
+    # Cap the number of buckets so a silly --interval can't blow up the demo.
+    while t < t1 and len(stamps) < 20000:
+        stamps.append(t.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        t += step
+    return stamps, minutes
+
+
+def _demo_rate_per_min(when: _dt.datetime, prof: dict) -> float:
+    """Instantaneous tokens/minute for a deployment profile at a point in time.
+
+    Combines a smooth daily (diurnal) wave peaking mid-afternoon with a sharp
+    recurring intra-hour burst near :20. Averaged over an hour the burst barely
+    shows; sampled at PT5M it spikes — which is exactly the granularity story the
+    tool is meant to illustrate.
+    """
+    import math
+
+    hour = when.hour + when.minute / 60.0
+    diurnal = 0.5 * (1.0 + math.cos((hour - 14.0) / 24.0 * 2.0 * math.pi))  # 0..1, max ~14:00
+    minute = when.minute
+    spike = math.exp(-(((minute - 20) % 60) ** 2) / (2.0 * 3.5 ** 2))  # sharp bump near :20
+    # A gentle day-to-day swell so one day stands out as the global peak.
+    day_swell = 1.0 + 0.18 * math.sin(when.toordinal() / 3.0)
+    return (prof["base"] + prof["amp"] * diurnal + prof["burst"] * spike) * day_swell
+
+
+def _demo_fetch(account: dict, start: str, end: str, interval: str,
+                subscription: str | None):
+    """Synthetic stand-in for ``_fetch_account_usage`` (same return shape)."""
+    stamps, minutes = _demo_buckets(start, end, interval)
+    # Sample the instantaneous rate at <=1-minute steps inside each bucket and
+    # average, so coarse intervals correctly smooth the intra-hour burst.
+    sample_step = max(1, int(minutes // 12) or 1)
+    deployments: dict[str, dict] = {}
+    series_by_dep: dict[str, dict[str, float]] = {}
+    for prof in account["deployments"]:
+        name = prof["name"]
+        series: dict[str, float] = {}
+        counts = _empty_counts()
+        for stamp in stamps:
+            t0 = _parse_iso(stamp)
+            if not t0:
+                continue
+            samples = list(range(0, int(minutes), sample_step)) or [0]
+            avg_rate = sum(
+                _demo_rate_per_min(t0 + _dt.timedelta(minutes=m), prof) for m in samples
+            ) / len(samples)
+            total = avg_rate * minutes
+            series[stamp] = total
+            gen = total * prof["gen_frac"]
+            counts["total_tokens"] += total
+            counts["generated_tokens"] += gen
+            counts["prompt_tokens"] += total - gen
+        peak_time, peak_val = _peak_of_series(series)
+        deployments[name] = {
+            "model": prof["model"],
+            "version": prof["version"],
+            "totals": counts,
+            "peak": {"tokens": peak_val, "time": peak_time},
+        }
+        series_by_dep[name] = series
+    clean = {k: v for k, v in account.items() if k != "deployments"}
+    return clean, deployments, series_by_dep
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -633,6 +753,11 @@ def main(argv: list[str] | None = None) -> int:
              "(uses app/ptu_core sizing; output tokens weighted per model).",
     )
     parser.add_argument("--workers", type=int, default=8, help="Parallel account queries (default 8).")
+    parser.add_argument(
+        "--demo", action="store_true",
+        help="Use built-in synthetic data instead of querying Azure (no credentials "
+             "needed, nothing live is exposed). Handy for demos and screenshots.",
+    )
     args = parser.parse_args(argv)
 
     now = _dt.datetime.now(_dt.timezone.utc)
@@ -646,17 +771,24 @@ def main(argv: list[str] | None = None) -> int:
     if retention_note:
         print(retention_note, file=sys.stderr)
 
-    print(f"Discovering OpenAI / AIServices accounts...", file=sys.stderr)
-    try:
-        accounts = _list_accounts(args.subscription)
-    except RuntimeError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
-    print(f"Found {len(accounts)} account(s). Querying token metrics...", file=sys.stderr)
+    if args.demo:
+        print("DEMO MODE: synthetic data, no Azure calls.", file=sys.stderr)
+        report = collect_usage(
+            _DEMO_ACCOUNTS, start, end, args.interval, args.subscription,
+            workers=args.workers, fetch=_demo_fetch,
+        )
+    else:
+        print(f"Discovering OpenAI / AIServices accounts...", file=sys.stderr)
+        try:
+            accounts = _list_accounts(args.subscription)
+        except RuntimeError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+        print(f"Found {len(accounts)} account(s). Querying token metrics...", file=sys.stderr)
 
-    report = collect_usage(
-        accounts, start, end, args.interval, args.subscription, workers=args.workers
-    )
+        report = collect_usage(
+            accounts, start, end, args.interval, args.subscription, workers=args.workers
+        )
 
     print_summary(report, ptu_hint=args.ptu_hint)
 

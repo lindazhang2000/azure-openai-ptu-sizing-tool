@@ -116,6 +116,48 @@ def test_deployment_ptu_hint_none_without_peak():
     assert tu._deployment_ptu_hint({"model": "gpt-4.1", "peak": {"tokens": 10}}, 0) is None
 
 
+def test_demo_fetch_returns_expected_shape_and_no_private_keys():
+    account = tu._DEMO_ACCOUNTS[0]
+    clean, deployments, series = tu._demo_fetch(
+        account, "2026-06-01T00:00:00Z", "2026-06-02T00:00:00Z", "PT1H", None
+    )
+    # The "deployments" profile list must not leak into the report account dict.
+    assert "deployments" not in clean
+    assert clean["name"] == account["name"]
+    assert set(deployments) == {d["name"] for d in account["deployments"]}
+    for name, dep in deployments.items():
+        assert dep["totals"]["total_tokens"] > 0
+        assert dep["peak"]["tokens"] > 0
+        assert series[name]  # non-empty timestamp series
+
+
+def test_demo_collect_usage_produces_peaks_without_azure():
+    report = tu.collect_usage(
+        tu._DEMO_ACCOUNTS, "2026-06-01T00:00:00Z", "2026-06-08T00:00:00Z",
+        "PT1H", None, workers=2, fetch=tu._demo_fetch,
+    )
+    assert len(report["accounts"]) == 2
+    assert report["peak"]["tokens"] > 0
+    # First account hosts two gpt-4.1 deployments -> a concurrent model peak exists.
+    chat = next(a for a in report["accounts"] if a["name"] == "contoso-chat-eastus2")
+    assert "gpt-4.1" in chat["model_peaks"]
+    assert chat["model_peaks"]["gpt-4.1"]["tokens"] > 0
+
+
+def test_demo_finer_interval_reveals_higher_peak_rate():
+    """PT5M should surface a higher tokens/min peak than PT1H (intra-hour burst)."""
+    args = ("2026-06-01T00:00:00Z", "2026-06-05T00:00:00Z")
+
+    def peak_rate(interval):
+        rep = tu.collect_usage(
+            tu._DEMO_ACCOUNTS, *args, interval, None, workers=2, fetch=tu._demo_fetch
+        )
+        return rep["peak"]["tokens"] / tu._interval_minutes(interval)
+
+    assert peak_rate("PT5M") > peak_rate("PT1H")
+
+
+
 def test_parse_iso_accepts_z_and_offset():
     d = tu._parse_iso("2026-06-01T00:00:00Z")
     assert d == dt.datetime(2026, 6, 1, tzinfo=dt.timezone.utc)

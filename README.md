@@ -175,7 +175,16 @@ python scripts/token_usage.py --days 7             # last 7 days
 python scripts/token_usage.py --interval PT5M      # finer peak resolution
 python scripts/token_usage.py --ptu-hint           # suggest a baseline PTU per peak
 python scripts/token_usage.py --json usage.json --csv usage.csv
+python scripts/token_usage.py --demo               # synthetic data, no Azure needed
 ```
+
+> **Try it with no Azure account — `--demo`.** Pass `--demo` to run against built-in
+> synthetic workloads (two pretend accounts, four deployments) instead of querying
+> Azure. No credentials, no live data exposed, and the numbers are deterministic — it
+> combines all the features (per-model concurrent peak, the `PT1H` vs `PT5M`
+> granularity story, `--ptu-hint`, `--json`/`--csv`) so it is ideal for demos,
+> screenshots, and recordings. See [docs/demo-script.md](docs/demo-script.md).
+
 
 Azure Monitor retains platform metrics for **~93 days**; if the requested range
 reaches further back the script warns that older data will be missing (peaks would

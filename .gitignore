@@ -40,3 +40,5 @@ linkedin/
 # Generated usage reports (scripts/token_usage.py)
 token_usage.csv
 token_usage.json
+demo-usage.csv
+demo-usage.json
