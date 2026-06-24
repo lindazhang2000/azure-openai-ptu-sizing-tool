@@ -20,6 +20,7 @@ from ptu_core import (
     region_supported,
     spillover_supported,
 )
+from ptu_core import find_model_preset, suggest_ptu_for_throughput
 
 
 def test_defaults_match_expected_scenario():
@@ -419,5 +420,45 @@ def test_data_zone_paygo_costs_more_than_global():
     assert dz["paygo_monthly"] == pytest.approx(glob["paygo_monthly"] * 1.10)
 
 
+def test_find_model_preset_exact_and_case_insensitive():
+    name, preset = find_model_preset("gpt-4.1")
+    assert name == "gpt-4.1"
+    assert preset is MODEL_PRESETS["gpt-4.1"]
+    # Case-insensitive match returns the canonical preset key.
+    assert find_model_preset("GPT-4.1")[0] == "gpt-4.1"
+
+
+def test_find_model_preset_trims_trailing_version():
+    # Azure model names often carry a date version that is not in the preset key.
+    assert find_model_preset("gpt-4.1-2025-04-14")[0] == "gpt-4.1"
+    # Exact sub-variant still wins over its parent.
+    assert find_model_preset("gpt-5-mini")[0] == "gpt-5-mini"
+    assert find_model_preset("gpt-5-mini-2025-08-01")[0] == "gpt-5-mini"
+
+
+def test_find_model_preset_unmatched_returns_none():
+    assert find_model_preset("totally-unknown-model") == (None, {})
+    assert find_model_preset("") == (None, {})
+    assert find_model_preset(None) == (None, {})
+
+
+def test_suggest_ptu_for_throughput_buffers_rounds_and_floors():
+    # raw = 100000/3000 = 33.33; *1.15 = 38.33; round up to 5 -> 40.
+    assert suggest_ptu_for_throughput(
+        100000, model_tpm_per_ptu=3000, safety_buffer=0.15,
+        min_ptu_commit=15, ptu_scale_increment=5,
+    ) == 40
+    # Tiny throughput is floored at the model minimum commitment.
+    assert suggest_ptu_for_throughput(
+        100, model_tpm_per_ptu=3000, min_ptu_commit=15, ptu_scale_increment=5,
+    ) == 15
+
+
+def test_suggest_ptu_for_throughput_uses_defaults_and_is_safe():
+    # Missing params fall back to DEFAULTS; never divides by zero.
+    val = suggest_ptu_for_throughput(0)
+    assert val == DEFAULTS["min_ptu_commit"]
+    big = suggest_ptu_for_throughput(1_000_000, model_tpm_per_ptu=0)  # guarded to 1
+    assert math.isfinite(big) and big > 0
 
 

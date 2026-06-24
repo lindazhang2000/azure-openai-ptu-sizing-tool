@@ -61,6 +61,60 @@ _UNKNOWN = "(unknown)"
 # The metric used for peak-demand analysis (total tokens per time bucket).
 _PEAK_COLUMN = "total_tokens"
 
+# Lazily-imported ptu_core (from app/) for the optional --ptu-hint feature. We
+# avoid importing it at module load so the report works standalone if app/ is
+# missing or its deps are unavailable.
+_PTU_CORE = None
+
+
+def _ptu_core():
+    """Best-effort import of app/ptu_core; returns the module or None."""
+    global _PTU_CORE
+    if _PTU_CORE is None:
+        app_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"
+        )
+        if app_dir not in sys.path:
+            sys.path.insert(0, app_dir)
+        try:
+            import ptu_core  # type: ignore
+            _PTU_CORE = ptu_core
+        except Exception:  # pragma: no cover - environment dependent
+            _PTU_CORE = False
+    return _PTU_CORE or None
+
+
+def _deployment_ptu_hint(dep: dict, minutes: float) -> dict | None:
+    """Map a deployment's peak bucket to a suggested baseline PTU.
+
+    Weights output tokens by the model's ``output_weight`` (PTU throughput is
+    denominated in input-equivalent tokens), splitting the peak total by the
+    deployment's period-wide prompt/generated ratio. Returns
+    ``{"ptu", "weighted_tpm", "preset"}`` or None if unavailable.
+    """
+    core = _ptu_core()
+    if not core or not minutes:
+        return None
+    peak_tokens = (dep.get("peak") or {}).get("tokens", 0) or 0
+    if peak_tokens <= 0:
+        return None
+    totals = dep.get("totals") or {}
+    total_tok = totals.get("total_tokens") or (
+        (totals.get("prompt_tokens") or 0) + (totals.get("generated_tokens") or 0)
+    )
+    gen_frac = (totals.get("generated_tokens", 0) / total_tok) if total_tok else 0.0
+    preset_name, preset = core.find_model_preset(dep.get("model"))
+    output_weight = preset.get("output_weight", core.DEFAULTS["output_weight"])
+    weighted_factor = (1 - gen_frac) + gen_frac * output_weight
+    weighted_tpm = (peak_tokens / minutes) * weighted_factor
+    ptu = core.suggest_ptu_for_throughput(
+        weighted_tpm,
+        model_tpm_per_ptu=preset.get("model_tpm_per_ptu"),
+        min_ptu_commit=preset.get("min_ptu_commit"),
+        ptu_scale_increment=preset.get("ptu_scale_increment"),
+    )
+    return {"ptu": ptu, "weighted_tpm": weighted_tpm, "preset": preset_name}
+
 
 def _interval_minutes(iso: str) -> float:
     """Convert an ISO 8601 duration (e.g. PT1H, PT5M, P1D) to minutes; 0 if unknown."""
@@ -365,7 +419,7 @@ def _fmt(n: float) -> str:
     return f"{int(round(n)):,}"
 
 
-def print_summary(report: dict) -> None:
+def print_summary(report: dict, ptu_hint: bool = False) -> None:
     """Print a readable per-account / per-deployment (model) table."""
     period = report["period"]
     print(
@@ -397,7 +451,7 @@ def print_summary(report: dict) -> None:
     print("\n" + "=" * 96)
     print(f"{'SUBSCRIPTION TOTAL':48}" + "".join(f"{_fmt(gt.get(c, 0)):>16}" for c in cols))
 
-    _print_peak_section(report)
+    _print_peak_section(report, ptu_hint=ptu_hint)
 
 
 def _fmt_peak_time(stamp: str) -> str:
@@ -407,7 +461,7 @@ def _fmt_peak_time(stamp: str) -> str:
     return stamp.replace("T", " ")[:16]
 
 
-def _print_peak_section(report: dict) -> None:
+def _print_peak_section(report: dict, ptu_hint: bool = False) -> None:
     """Print a focused peak-demand section (busiest bucket per the interval)."""
     period = report["period"]
     minutes = report.get("interval_minutes") or _interval_minutes(period["interval"])
@@ -428,8 +482,14 @@ def _print_peak_section(report: dict) -> None:
             peak = dep.get("peak") or {}
             tokens = peak.get("tokens", 0)
             label = f"  {dep_name}  ({dep['model']}:{dep['version']})"
+            suffix = ""
+            if ptu_hint:
+                hint = _deployment_ptu_hint(dep, minutes)
+                if hint:
+                    tag = "" if hint["preset"] else " *generic"
+                    suffix = f"  ->  ~{hint['ptu']} PTU{tag}"
             print(
-                f"{label:50}{_fmt(tokens):>14}  {rate(tokens):>14}  at {_fmt_peak_time(peak.get('time', ''))}"
+                f"{label:50}{_fmt(tokens):>14}  {rate(tokens):>14}  at {_fmt_peak_time(peak.get('time', ''))}{suffix}"
             )
         # Per-model concurrent peak, only when a model is spread over >1 deployment
         # (otherwise it just repeats that single deployment's peak).
@@ -455,40 +515,49 @@ def _print_peak_section(report: dict) -> None:
         f"{'SUBSCRIPTION PEAK':50}{_fmt(sp.get('tokens', 0)):>14}"
         f"  {rate(sp.get('tokens', 0)):>14}  at {_fmt_peak_time(sp.get('time', ''))}"
     )
+    if ptu_hint:
+        print(
+            "\n  PTU hint: baseline PTU to cover each deployment's observed peak "
+            f"({period['interval']} bucket), output tokens weighted per model.\n"
+            "  Directional only \u2014 validate in the sizing tool; '*generic' = no model preset matched."
+        )
 
 
-def write_csv(report: dict, path: str) -> None:
+def write_csv(report: dict, path: str, ptu_hint: bool = False) -> None:
     """Write a flat, one-row-per-(account, deployment) CSV with the model joined in."""
     cols = list(_TOKEN_METRICS.values())
     minutes = report.get("interval_minutes") or _interval_minutes(report["period"]["interval"])
+    header = ["account", "resource_group", "location", "kind",
+              "deployment", "model", "model_version", *cols,
+              "peak_total_tokens", "peak_tokens_per_min", "peak_time"]
+    if ptu_hint:
+        header.append("suggested_ptu")
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow(
-            ["account", "resource_group", "location", "kind",
-             "deployment", "model", "model_version", *cols,
-             "peak_total_tokens", "peak_tokens_per_min", "peak_time"]
-        )
+        writer.writerow(header)
         for acc in report["accounts"]:
             for dep_name, dep in acc["deployments"].items():
                 t = dep["totals"]
                 peak = dep.get("peak") or {}
                 peak_tokens = int(round(peak.get("tokens", 0)))
                 peak_per_min = round(peak_tokens / minutes, 1) if minutes else ""
-                writer.writerow(
-                    [
-                        acc["name"],
-                        acc.get("resourceGroup"),
-                        acc.get("location"),
-                        acc.get("kind"),
-                        dep_name,
-                        dep.get("model"),
-                        dep.get("version"),
-                        *(int(round(t.get(c, 0))) for c in cols),
-                        peak_tokens,
-                        peak_per_min,
-                        peak.get("time", ""),
-                    ]
-                )
+                row = [
+                    acc["name"],
+                    acc.get("resourceGroup"),
+                    acc.get("location"),
+                    acc.get("kind"),
+                    dep_name,
+                    dep.get("model"),
+                    dep.get("version"),
+                    *(int(round(t.get(c, 0))) for c in cols),
+                    peak_tokens,
+                    peak_per_min,
+                    peak.get("time", ""),
+                ]
+                if ptu_hint:
+                    hint = _deployment_ptu_hint(dep, minutes)
+                    row.append(hint["ptu"] if hint else "")
+                writer.writerow(row)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -509,6 +578,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--json", dest="json_path", help="Write the full breakdown to this JSON file.")
     parser.add_argument("--csv", dest="csv_path", help="Write a flat per-model CSV to this file.")
+    parser.add_argument(
+        "--ptu-hint", action="store_true",
+        help="Show a directional baseline-PTU suggestion for each deployment's peak "
+             "(uses app/ptu_core sizing; output tokens weighted per model).",
+    )
     parser.add_argument("--workers", type=int, default=8, help="Parallel account queries (default 8).")
     args = parser.parse_args(argv)
 
@@ -531,14 +605,14 @@ def main(argv: list[str] | None = None) -> int:
         accounts, start, end, args.interval, args.subscription, workers=args.workers
     )
 
-    print_summary(report)
+    print_summary(report, ptu_hint=args.ptu_hint)
 
     if args.json_path:
         with open(args.json_path, "w", encoding="utf-8") as fh:
             json.dump(report, fh, indent=2)
         print(f"\nWrote JSON: {args.json_path}", file=sys.stderr)
     if args.csv_path:
-        write_csv(report, args.csv_path)
+        write_csv(report, args.csv_path, ptu_hint=args.ptu_hint)
         print(f"Wrote CSV:  {args.csv_path}", file=sys.stderr)
 
     return 0

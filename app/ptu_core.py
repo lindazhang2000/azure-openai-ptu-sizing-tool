@@ -303,6 +303,55 @@ def _round_up_to_increment(value, increment):
     return math.ceil(value / inc) * inc
 
 
+def find_model_preset(model_name):
+    """Best-effort match an Azure model name to a MODEL_PRESETS entry.
+
+    Tries an exact (case-insensitive) match first, then progressively trims the
+    trailing version component (e.g. ``gpt-4.1-2025-04-14`` -> ``gpt-4.1``).
+    Returns ``(preset_name, preset_dict)`` or ``(None, {})`` when nothing matches.
+    """
+    if not model_name:
+        return None, {}
+    lowered = {k.lower(): k for k in MODEL_PRESETS}
+    name = str(model_name).strip()
+    candidate = name.lower()
+    while candidate:
+        if candidate in lowered:
+            key = lowered[candidate]
+            return key, MODEL_PRESETS[key]
+        if "-" not in candidate:
+            break
+        candidate = candidate.rsplit("-", 1)[0]
+    return None, {}
+
+
+def suggest_ptu_for_throughput(
+    weighted_tpm,
+    model_tpm_per_ptu=None,
+    safety_buffer=None,
+    min_ptu_commit=None,
+    ptu_scale_increment=None,
+):
+    """Suggest a baseline PTU that covers an observed weighted tokens-per-minute rate.
+
+    Mirrors the buffer + round-up + minimum-commit logic in ``calculate`` so a
+    measured peak (from ``scripts/token_usage.py``) maps to a PTU figure the same
+    way the sizing tool would. ``weighted_tpm`` must already weight output tokens
+    by the model's ``output_weight`` (PTU throughput is denominated in
+    input-equivalent tokens). Missing parameters fall back to ``DEFAULTS``.
+    """
+    model_tpm_per_ptu = max(model_tpm_per_ptu or DEFAULTS["model_tpm_per_ptu"], 1)
+    safety_buffer = DEFAULTS["safety_buffer"] if safety_buffer is None else safety_buffer
+    min_ptu_commit = DEFAULTS["min_ptu_commit"] if min_ptu_commit is None else min_ptu_commit
+    inc = max(ptu_scale_increment or DEFAULTS["ptu_scale_increment"], 1)
+    raw = max(weighted_tpm, 0.0) / model_tpm_per_ptu
+    buffered = raw * (1 + safety_buffer)
+    return max(
+        _round_up_to_increment(buffered, inc),
+        _round_up_to_increment(max(min_ptu_commit, 0), inc),
+    )
+
+
 def calculate(values):
     ptu_scale_increment = values.get("ptu_scale_increment", DEFAULTS["ptu_scale_increment"])
     reservation_discount_monthly = values.get("reservation_discount_monthly", DEFAULTS["reservation_discount_monthly"])

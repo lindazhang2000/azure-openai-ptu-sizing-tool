@@ -32,4 +32,4 @@ package-dir = { "" = "app" }
 py-modules = ["ptu_core"]
 
 [tool.pytest.ini_options]
-testpaths = ["app"]
+testpaths = ["app", "scripts"]

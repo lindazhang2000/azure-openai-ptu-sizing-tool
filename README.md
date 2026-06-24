@@ -173,12 +173,17 @@ az login
 python scripts/token_usage.py                      # last 30 days, hourly peaks
 python scripts/token_usage.py --days 7             # last 7 days
 python scripts/token_usage.py --interval PT5M      # finer peak resolution
+python scripts/token_usage.py --ptu-hint           # suggest a baseline PTU per peak
 python scripts/token_usage.py --json usage.json --csv usage.csv
 ```
 
 It prints two sections: **Token usage** (totals for the period) and **Peak demand**
 (the busiest single time bucket per deployment, account, and the whole subscription,
-with a tokens/min rate and timestamp).
+with a tokens/min rate and timestamp). When a model is spread across several
+deployments, a per-model *concurrent* peak is shown too. Add `--ptu-hint` to map each
+deployment's observed peak to a directional baseline-PTU suggestion using the same
+sizing logic as the app (output tokens weighted per model; `*generic` means no model
+preset matched, so defaults were used).
 
 > **Interval trade-off — pick a fine `--interval` when sizing PTUs.** Peak demand is
 > only as sharp as the bucket it's measured in. A burst that reads as `~487/min` at
