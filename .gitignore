@@ -36,3 +36,7 @@ linkedin/
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# Generated usage reports (scripts/token_usage.py)
+token_usage.csv
+token_usage.json

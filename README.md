@@ -86,7 +86,7 @@ The core decision this tool informs — pick the row that matches the workload's
 | Path | Contents |
 | --- | --- |
 | [app/](app) | The PTU sizing tool: Streamlit app, notebook, README, requirements, and the bundled `region_data.json` snapshot. |
-| [scripts/](scripts) | Operations: `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` (regenerate region availability from the Azure Models API), and `region-refresh-job.yaml` (the daily Container Apps Job definition). |
+| [scripts/](scripts) | Operations: `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` (regenerate region availability from the Azure Models API), `token_usage.py` (per-deployment / per-model token usage across the subscription), and `region-refresh-job.yaml` (the daily Container Apps Job definition). |
 
 ## Running the tool
 
