@@ -6,6 +6,8 @@ PTU-hint bridge into ptu_core. Azure is never called: collect_usage's per-accoun
 fetch is monkeypatched with synthetic metrics.
 """
 
+import datetime as dt
+
 import pytest
 
 import token_usage as tu
@@ -112,3 +114,39 @@ def test_deployment_ptu_hint_none_without_peak():
     assert tu._deployment_ptu_hint(dep, 60) is None
     # Zero interval also yields no hint (avoids divide-by-zero).
     assert tu._deployment_ptu_hint({"model": "gpt-4.1", "peak": {"tokens": 10}}, 0) is None
+
+
+def test_parse_iso_accepts_z_and_offset():
+    d = tu._parse_iso("2026-06-01T00:00:00Z")
+    assert d == dt.datetime(2026, 6, 1, tzinfo=dt.timezone.utc)
+    # Naive timestamps are assumed UTC.
+    assert tu._parse_iso("2026-06-01T00:00:00").tzinfo == dt.timezone.utc
+    # Unparseable input returns None.
+    assert tu._parse_iso("not-a-date") is None
+    assert tu._parse_iso("") is None
+
+
+def test_enforce_retention_passes_recent_start():
+    now = dt.datetime(2026, 6, 24, tzinfo=dt.timezone.utc)
+    start = "2026-06-01T00:00:00Z"  # 23 days back, within retention
+    out, note = tu._enforce_retention(start, now)
+    assert out == start
+    assert note is None
+
+
+def test_enforce_retention_warns_for_old_start():
+    now = dt.datetime(2026, 6, 24, tzinfo=dt.timezone.utc)
+    start = "2026-01-01T00:00:00Z"  # ~174 days back, beyond ~93-day retention
+    out, note = tu._enforce_retention(start, now)
+    assert out == start  # unchanged when only warning
+    assert note is not None and "WARNING" in note
+
+
+def test_enforce_retention_clamps_when_requested():
+    now = dt.datetime(2026, 6, 24, tzinfo=dt.timezone.utc)
+    start = "2026-01-01T00:00:00Z"
+    out, note = tu._enforce_retention(start, now, clamp=True)
+    cutoff = now - dt.timedelta(days=tu._METRIC_RETENTION_DAYS)
+    assert out == cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert note is not None and "clamped" in note
+

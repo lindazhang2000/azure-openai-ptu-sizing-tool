@@ -61,6 +61,49 @@ _UNKNOWN = "(unknown)"
 # The metric used for peak-demand analysis (total tokens per time bucket).
 _PEAK_COLUMN = "total_tokens"
 
+# Azure Monitor retains platform metrics for ~93 days. Queries reaching further
+# back silently return only the retained window, so we guard against it.
+_METRIC_RETENTION_DAYS = 93
+
+
+def _parse_iso(stamp: str) -> "_dt.datetime | None":
+    """Parse an ISO 8601 timestamp (accepts a trailing 'Z'); None if unparseable."""
+    if not stamp:
+        return None
+    try:
+        dt = _dt.datetime.fromisoformat(stamp.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_dt.timezone.utc)
+    return dt
+
+
+def _enforce_retention(
+    start: str, now: "_dt.datetime", clamp: bool = False
+) -> "tuple[str, str | None]":
+    """Guard the start time against Azure's ~93-day metric retention.
+
+    Returns ``(start, note)``. When ``start`` predates the retention cutoff the
+    note warns that older data will be missing; with ``clamp=True`` the start is
+    pulled forward to the cutoff instead. Unparseable starts pass through.
+    """
+    cutoff = now - _dt.timedelta(days=_METRIC_RETENTION_DAYS)
+    parsed = _parse_iso(start)
+    if parsed is None or parsed >= cutoff:
+        return start, None
+    cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if clamp:
+        return cutoff_str, (
+            f"NOTE: start predates Azure's ~{_METRIC_RETENTION_DAYS}-day metric "
+            f"retention; clamped start forward to {cutoff_str}."
+        )
+    return start, (
+        f"WARNING: start predates Azure's ~{_METRIC_RETENTION_DAYS}-day metric "
+        f"retention; data before {cutoff_str} will be missing and peaks may be "
+        "under-counted. Pass --clamp to pull the start forward."
+    )
+
 # Lazily-imported ptu_core (from app/) for the optional --ptu-hint feature. We
 # avoid importing it at module load so the report works standalone if app/ is
 # missing or its deps are unavailable.
@@ -572,6 +615,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", help="Start time, ISO 8601 UTC (e.g. 2026-06-01T00:00:00Z).")
     parser.add_argument("--end", help="End time, ISO 8601 UTC (default: now).")
     parser.add_argument(
+        "--clamp", action="store_true",
+        help=f"Pull the start forward to Azure's ~{_METRIC_RETENTION_DAYS}-day metric "
+             "retention cutoff instead of warning when the range reaches further back.",
+    )
+    parser.add_argument(
         "--interval", default="PT1H",
         help="Metric granularity (ISO 8601 duration, default PT1H). Totals are summed "
              "across buckets; peak demand is the busiest single bucket of this size.",
@@ -592,6 +640,10 @@ def main(argv: list[str] | None = None) -> int:
         start = args.start
     else:
         start = (now - _dt.timedelta(days=args.days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    start, retention_note = _enforce_retention(start, now, clamp=args.clamp)
+    if retention_note:
+        print(retention_note, file=sys.stderr)
 
     print(f"Discovering OpenAI / AIServices accounts...", file=sys.stderr)
     try:

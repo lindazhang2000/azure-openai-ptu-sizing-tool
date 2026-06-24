@@ -177,6 +177,11 @@ python scripts/token_usage.py --ptu-hint           # suggest a baseline PTU per 
 python scripts/token_usage.py --json usage.json --csv usage.csv
 ```
 
+Azure Monitor retains platform metrics for **~93 days**; if the requested range
+reaches further back the script warns that older data will be missing (peaks would
+be under-counted). Pass `--clamp` to pull the start forward to the retention cutoff
+instead.
+
 It prints two sections: **Token usage** (totals for the period) and **Peak demand**
 (the busiest single time bucket per deployment, account, and the whole subscription,
 with a tokens/min rate and timestamp). When a model is spread across several
