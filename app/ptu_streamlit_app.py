@@ -449,9 +449,10 @@ if _be["rows"]:
         )
     else:
         st.info(
-            f"**Recommended: stay on PAYGO.** At your current load of "
-            f"{_be['current_rpm']:,.0f} RPM it runs **~${-_diff:,.0f}/mo cheaper** than a {_be_tier} PTU "
-            f"(${_paygo_now:,.0f} vs ${_tier_ptu_now:,.0f})."
+            f"**PTU ({_be_tier}) costs ~${-_diff:,.0f}/mo more than PAYGO** at your current load of "
+            f"{_be['current_rpm']:,.0f} RPM (${_tier_ptu_now:,.0f} vs ${_paygo_now:,.0f}). "
+            f"**PTU may still be the right call above this cost premium** — for guaranteed throughput, "
+            f"consistent low latency, and no PAYGO rate-limiting (429s)."
         )
 
     # Region shading: green where PAYGO is the cheaper architecture, blue where
