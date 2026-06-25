@@ -126,6 +126,20 @@ The two are **complementary, not competing**. Microsoft's calculator is the auth
 
 **Use this** to decide the pattern and frame PTU-vs-PAYGO in early architecture conversations; **use Microsoft's** to lock the final, quotable numbers.
 
+## How this differs from other PTU calculators
+
+Plenty of community tools size PTUs, compare AI costs, or list region availability. Most answer **"how many PTUs"** or **"what does it cost"**. This tool answers the question that comes *before* both — **whether you should use PTU at all, and what architecture to wrap around it** — and keeps its region data current automatically:
+
+| Common tool category | What it typically outputs | How this tool compares |
+| --- | --- | --- |
+| **PTU / "optimal PTU" calculator** | A PTU *quantity* for a deployment | Gives the quantity **plus the decision** — PTU vs PAYGO vs hybrid — and sizes to the **baseline**, with peak as a separate reference (avoids the "size to peak" trap). |
+| **AI cost calculator** | Cost comparison across models / configs | Compares **commitment models** (PTU vs PAYGO) with the **breakeven crossover** made explicit, not just per-model cost. |
+| **Model / region availability tool** | Region & feature coverage (often static) | **Daily-refreshed live availability** from the Azure Models API, per **model × provisioned deployment type** (Global / Data Zone / Regional), auto-updated by a Container Apps Job. *(Deployment availability, not real-time quota.)* |
+| **Copilot / product cost calculator** | Token billing for a specific product | Different scope — this is Azure OpenAI capacity planning. |
+| **Model playground** | Interactive experimentation | Unrelated — this is a sizing & architecture decision tool. |
+
+**In short:** other tools tell you *how many PTUs* and *what they cost*. This one tells you **whether to buy PTUs at all, what architecture to wrap around them, and where each deployment type is actually available** — ideally seeded from your **real usage telemetry** (see [Token usage reporting](#token-usage-reporting)).
+
 ## The PTU decision triangle
 
 Every PTU decision trades off three forces. PTU sits in the middle — you lean toward whichever corner the workload demands:
