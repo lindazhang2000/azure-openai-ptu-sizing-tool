@@ -140,7 +140,7 @@ Plenty of community tools size PTUs, compare AI costs, or list region availabili
 
 **In short:** other tools tell you *how many PTUs* and *what they cost*. This one tells you **whether to buy PTUs at all, what architecture to wrap around them, and where each deployment type is actually available** — ideally seeded from your **real usage telemetry** (see [Token usage reporting](#token-usage-reporting)).
 
-> 📄 **Further reading:** the thinking behind this tool is written up in the Architecture-Driven Capacity Planning whitepaper ([HTML](docs/Architecture_Driven_Capacity_Planning_Whitepaper.html) · [Word](docs/Architecture_Driven_Capacity_Planning_Whitepaper.docx)) — a decision-first model for enterprise AI capacity planning.
+> 📄 **Further reading:** the thinking behind this tool is written up in the Architecture-Driven Capacity Planning whitepaper ([read online](https://lindazhang2000.github.io/azure-openai-ptu-sizing-tool/Architecture_Driven_Capacity_Planning_Whitepaper.html) · [Word](docs/Architecture_Driven_Capacity_Planning_Whitepaper.docx)) — a decision-first model for enterprise AI capacity planning.
 
 ## The PTU decision triangle
 
