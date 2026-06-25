@@ -128,10 +128,37 @@ def _reset_defaults():
         st.session_state[k] = v
 
 
+def _dismiss_tour():
+    """Hide the first-run guided tour."""
+    st.session_state["_tour_dismissed"] = True
+
+
+def _show_tour():
+    """Bring the guided tour back (from the sidebar)."""
+    st.session_state["_tour_dismissed"] = False
+
+
 with st.sidebar:
     st.header("Quick actions")
     st.button("Reset to default assumptions", on_click=_reset_defaults)
+    st.button("Show getting-started guide", on_click=_show_tour)
     st.markdown("**Note**  \nThis tool provides **illustrative and directional guidance only** and is **not an official Azure PTU calculator**. Throughput assumptions, minimum PTU commitments, and pricing are subject to change. Always verify against current Azure documentation before making customer-specific decisions.")
+
+# First-run guided tour — shown expanded on the first visit and dismissible. The
+# sidebar "Show getting-started guide" button brings it back. Placed above the
+# inputs so newcomers see the 3-step workflow before touching any control.
+if not st.session_state.get("_tour_dismissed", False):
+    with st.container(border=True):
+        st.markdown("#### 👋 New here? Three steps to your answer")
+        t1, t2, t3 = st.columns(3)
+        with t1:
+            st.markdown("**1 · Describe the workload**  \nPick a **model preset**, **deployment type**, and **region**, then enter **average RPM** and **tokens per request** on the left. Hover any ⓘ icon for an explanation.")
+        with t2:
+            st.markdown("**2 · Read the recommendation**  \nThe right panel gives **Recommended PTUs**, the **architecture pattern** (PTU-first / spillover / PAYGO), and the throughput behind it.")
+        with t3:
+            st.markdown("**3 · Compare cost & share**  \nThe **Monthly cost comparison** weighs PTU vs PAYGO vs spillover vs Priority. Use **📄 Export shareable report** to hand stakeholders a PDF.")
+        st.caption("Tip: start from a model preset — it fills throughput, minimum commit, and pricing for you. Toggle **Match Foundry calculator** to size for peak like the official tool. Guidance is directional; confirm final numbers in the official Azure PTU calculator before committing.")
+        st.button("Got it — hide this", on_click=_dismiss_tour)
 
 left, right = st.columns([1.25, 0.75], gap="large")
 
