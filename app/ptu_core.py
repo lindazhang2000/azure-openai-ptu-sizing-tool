@@ -786,32 +786,47 @@ def build_report_html(values, calc, meta=None):
 </body>
 </html>"""
 
-def breakeven_series(values, points=25, rpm_max=None):
+def breakeven_series(values, points=25, rpm_max=None, ptu_tier="Monthly reservation"):
     """Sweep average/peak RPM and recompute the monthly cost lanes at each step.
 
     PTU is fundamentally an architecture decision: below some load PAYGO is
     cheaper, above it the reserved PTU baseline wins. This returns the data to
     draw that crossover.
 
+    ``ptu_tier`` selects which provisioned pricing tier drives the PTU lane and
+    the break-even point — one of ``"Hourly"``, ``"Monthly reservation"`` or
+    ``"Yearly reservation"`` (matching the ``pricing_tiers`` terms from
+    :func:`calculate`). Cheaper tiers (yearly) lower the PTU slope and can move
+    the crossover into range where the monthly tier never crosses.
+
     Returns a dict:
       - ``rows``: list of ``{rpm, paygo_monthly, ptu_monthly, blended_monthly,
         priority_monthly}`` sampled across the RPM range.
-      - ``breakeven_rpm``: the RPM at which the PTU (1-month reserved) lane first
-        becomes cheaper than PAYGO, or ``None`` if it never does within range.
+      - ``breakeven_rpm``: the RPM at which the selected PTU tier first becomes
+        cheaper than PAYGO, or ``None`` if it never does within range.
       - ``current_rpm``: the RPM from ``values`` (so the UI can mark "you are here").
       - ``priority_supported``: whether the priority lane applies.
+      - ``ptu_tier``: the tier label used for the PTU lane.
 
     Cost is recomputed via :func:`calculate`, so the PTU lane keeps its stepwise
     rounding to the scale increment.
     """
     current_rpm = max(float(values.get("avg_rpm", 0.0)), 0.0)
 
+    def _ptu_cost(calc):
+        for tier in calc.get("pricing_tiers", []):
+            if tier["term"] == ptu_tier:
+                return tier["total_monthly"]
+        return calc["ptu_monthly"]
+
     def costs(rpm):
         v = dict(values)
         v["avg_rpm"] = rpm
-        return calculate(v)
+        c = calculate(v)
+        c["ptu_monthly"] = _ptu_cost(c)
+        return c
 
-    # Find break-even (first RPM where reserved PTU <= PAYGO) via a fine scan.
+    # Find break-even (first RPM where the selected PTU tier <= PAYGO) via a fine scan.
     cap = max(current_rpm * 8.0, 1.0)
     scan_steps = 240
     breakeven_rpm = None
@@ -844,6 +859,7 @@ def breakeven_series(values, points=25, rpm_max=None):
         "breakeven_rpm": breakeven_rpm,
         "current_rpm": current_rpm,
         "priority_supported": priority_supported,
+        "ptu_tier": ptu_tier,
     }
 
 

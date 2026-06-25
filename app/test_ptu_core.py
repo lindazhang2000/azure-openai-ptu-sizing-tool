@@ -621,6 +621,31 @@ def test_breakeven_series_respects_explicit_rpm_max():
     assert be["rows"][-1]["rpm"] == pytest.approx(500)
 
 
+def test_breakeven_series_tier_selects_pricing_tier_for_ptu_lane():
+    # The PTU lane should track the chosen pricing tier. At a fixed RPM the
+    # hourly tier is the most expensive and the yearly tier the cheapest.
+    vals = {**DEFAULTS, "avg_rpm": 200}
+    hourly = ptu_core.breakeven_series(vals, points=4, ptu_tier="Hourly")
+    monthly = ptu_core.breakeven_series(vals, points=4, ptu_tier="Monthly reservation")
+    yearly = ptu_core.breakeven_series(vals, points=4, ptu_tier="Yearly reservation")
+    assert hourly["ptu_tier"] == "Hourly"
+    h = hourly["rows"][-1]["ptu_monthly"]
+    m = monthly["rows"][-1]["ptu_monthly"]
+    y = yearly["rows"][-1]["ptu_monthly"]
+    assert h > m > y
+
+
+def test_breakeven_series_cheaper_tier_lowers_breakeven():
+    # A cheaper PTU tier should never push the crossover to a higher RPM than a
+    # pricier tier; the yearly tier crosses no later than the monthly tier.
+    vals = {**DEFAULTS, "ptu_hourly_price": 0.5, "avg_rpm": 120}
+    monthly = ptu_core.breakeven_series(vals, ptu_tier="Monthly reservation")
+    yearly = ptu_core.breakeven_series(vals, ptu_tier="Yearly reservation")
+    assert monthly["breakeven_rpm"] is not None
+    assert yearly["breakeven_rpm"] is not None
+    assert yearly["breakeven_rpm"] <= monthly["breakeven_rpm"]
+
+
 def test_build_report_csv_has_header_and_cost_lanes():
     r = calculate(DEFAULTS)
     csv_out = ptu_core.build_report_csv(

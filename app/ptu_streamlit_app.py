@@ -411,12 +411,24 @@ st.altair_chart(cost_chart, width="stretch")
 # Break-even view: PTU is an architecture decision, not just a discount. Sweep
 # the request rate and show where the reserved PTU baseline overtakes PAYGO, so
 # the crossover (and where this workload sits relative to it) is visible.
-_be = breakeven_series(values)
+_be_tier = st.radio(
+    "PTU pricing tier for break-even",
+    ["Hourly", "Monthly reservation", "Yearly reservation"],
+    index=1,
+    horizontal=True,
+    help="Which provisioned commitment drives the PTU line. Cheaper tiers (yearly) lower the PTU slope and can move the crossover into range.",
+)
+_be_tier_label = {
+    "Hourly": "PTU (hourly)",
+    "Monthly reservation": "PTU (1-mo reservation)",
+    "Yearly reservation": "PTU (1-yr reservation)",
+}[_be_tier]
+_be = breakeven_series(values, ptu_tier=_be_tier)
 if _be["rows"]:
     _rpm_label = "Peak requests per minute" if foundry_mode else "Average requests per minute"
     be_records = []
     for _r in _be["rows"]:
-        be_records.append({"RPM": _r["rpm"], "Lane": "PTU (reserved)", "Monthly $": _r["ptu_monthly"]})
+        be_records.append({"RPM": _r["rpm"], "Lane": _be_tier_label, "Monthly $": _r["ptu_monthly"]})
         be_records.append({"RPM": _r["rpm"], "Lane": "PAYGO", "Monthly $": _r["paygo_monthly"]})
     be_df = pd.DataFrame(be_records)
     be_lines = (
@@ -446,13 +458,13 @@ if _be["rows"]:
     if _be["breakeven_rpm"]:
         _be_side = "above" if _be["current_rpm"] >= _be["breakeven_rpm"] else "below"
         st.caption(
-            f"Break-even ≈ **{_be['breakeven_rpm']:,.0f} RPM** (blue line): past it the reserved PTU baseline is cheaper than PAYGO. "
+            f"Break-even ≈ **{_be['breakeven_rpm']:,.0f} RPM** (blue line) at the **{_be_tier}** tier: past it the PTU baseline is cheaper than PAYGO. "
             f"Your current load of {_be['current_rpm']:,.0f} RPM (grey dashed) sits **{_be_side}** break-even."
         )
     else:
         st.caption(
-            f"Across the charted range PAYGO stays cheaper than a reserved PTU baseline — this workload is below the PTU break-even. "
-            f"Current load: {_be['current_rpm']:,.0f} RPM (grey dashed)."
+            f"Across the charted range PAYGO stays cheaper than the **{_be_tier}** PTU baseline — this workload is below the PTU break-even. "
+            f"Current load: {_be['current_rpm']:,.0f} RPM (grey dashed). Try the yearly tier to lower the PTU line."
         )
 
 # One-click shareable report — a self-contained HTML file stakeholders can open
