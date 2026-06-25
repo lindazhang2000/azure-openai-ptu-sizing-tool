@@ -15,7 +15,7 @@ import os
 # discounts, and per-model PAYGO $/1M-token rates) were confirmed against the
 # Azure OpenAI pricing page on the date below. Bump this when you re-verify or
 # update any price so drift is obvious in one place.
-PRICING_CONFIRMED_AS_OF = "2026-06-22"
+PRICING_CONFIRMED_AS_OF = "2026-06-25"
 PRICING_SOURCE_URL = (
     "https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/"
 )
@@ -42,6 +42,14 @@ DEFAULTS = {
     "paygo_input_per_1m": 2.0,
     "paygo_cached_per_1m": 0.5,
     "paygo_output_per_1m": 8.0,
+    # Priority processing is a Standard service tier billed per token at a higher
+    # "priority tier" rate in exchange for a defined latency target (no PTU
+    # commitment). Each supporting MODEL_PRESETS entry carries confirmed per-model
+    # `priority_*_per_1m` rates; this multiplier is only the editable fallback for
+    # a Custom/non-OpenAI preset that has no confirmed priority rates. The public
+    # pricing page shows roughly 1.75x–2x Standard depending on model.
+    # https://learn.microsoft.com/azure/foundry/openai/concepts/priority-processing
+    "priority_multiplier": 1.75,
     "hours_per_month": 730,
 }
 
@@ -99,6 +107,19 @@ def spillover_supported(deployment_type):
     return deployment_type in SPILLOVER_DEPLOYMENT_TYPES
 
 
+# Priority processing (a Standard service tier billed per token at a higher
+# "priority tier" rate) is supported only on Global Standard and Data Zone
+# Standard (US) deployments — NOT Regional or EU Data Zone. It trades a price
+# premium for a defined latency target without any provisioned commitment.
+# https://learn.microsoft.com/azure/foundry/openai/concepts/priority-processing
+PRIORITY_DEPLOYMENT_TYPES = ["Global", "Data Zone"]
+
+
+def priority_supported(deployment_type):
+    """Return True if the deployment type supports priority processing."""
+    return deployment_type in PRIORITY_DEPLOYMENT_TYPES
+
+
 # Per-model sizing constants from the official PTU sizing guidance
 # (Input TPM per PTU, output-to-input ratio, and the deployment minimum/scale
 # increment for each deployment type). `min_ptu_commit`/`ptu_scale_increment`
@@ -109,14 +130,18 @@ def spillover_supported(deployment_type):
 # Regional standard are exactly 10% higher (see PAYGO_DEPLOYMENT_MULTIPLIER).
 # Llama-3.3-70B is priced as a Foundry MaaS model (separate pricing page), so it
 # has no OpenAI PAYGO rate here and falls back to the editable DEFAULTS.
-# Re-verify all values against current docs.
+# `priority_*_per_1m` are the model's confirmed **Global** priority-processing
+# rates ($/1M tokens) from the same pricing page (Data Zone priority is exactly
+# 10% higher, like PAYGO). Only models that offer priority processing carry
+# these keys — gpt-4.1-nano, gpt-4o, and Llama-3.3-70B do not support it and so
+# omit them. Re-verify all values against current docs.
 MODEL_PRESETS = {
-    "gpt-5.2": {"model_tpm_per_ptu": 3400, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global"], "paygo_input_per_1m": 1.75, "paygo_cached_per_1m": 0.18, "paygo_output_per_1m": 14.0},
-    "gpt-5.1": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0},
-    "gpt-5": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0},
-    "gpt-5-mini": {"model_tpm_per_ptu": 23750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.25, "paygo_cached_per_1m": 0.03, "paygo_output_per_1m": 2.0},
-    "gpt-4.1": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 2.0, "paygo_cached_per_1m": 0.5, "paygo_output_per_1m": 8.0},
-    "gpt-4.1-mini": {"model_tpm_per_ptu": 14900, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.4, "paygo_cached_per_1m": 0.1, "paygo_output_per_1m": 1.6},
+    "gpt-5.2": {"model_tpm_per_ptu": 3400, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global"], "paygo_input_per_1m": 1.75, "paygo_cached_per_1m": 0.18, "paygo_output_per_1m": 14.0, "priority_input_per_1m": 3.50, "priority_cached_per_1m": 0.35, "priority_output_per_1m": 28.0},
+    "gpt-5.1": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0, "priority_input_per_1m": 2.50, "priority_cached_per_1m": 0.25, "priority_output_per_1m": 20.0},
+    "gpt-5": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0, "priority_input_per_1m": 2.50, "priority_cached_per_1m": 0.25, "priority_output_per_1m": 20.0},
+    "gpt-5-mini": {"model_tpm_per_ptu": 23750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.25, "paygo_cached_per_1m": 0.03, "paygo_output_per_1m": 2.0, "priority_input_per_1m": 0.45, "priority_cached_per_1m": 0.05, "priority_output_per_1m": 3.60},
+    "gpt-4.1": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 2.0, "paygo_cached_per_1m": 0.5, "paygo_output_per_1m": 8.0, "priority_input_per_1m": 3.50, "priority_cached_per_1m": 0.88, "priority_output_per_1m": 14.0},
+    "gpt-4.1-mini": {"model_tpm_per_ptu": 14900, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.4, "paygo_cached_per_1m": 0.1, "paygo_output_per_1m": 1.6, "priority_input_per_1m": 0.70, "priority_cached_per_1m": 0.18, "priority_output_per_1m": 2.80},
     "gpt-4.1-nano": {"model_tpm_per_ptu": 59400, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.1, "paygo_cached_per_1m": 0.03, "paygo_output_per_1m": 0.4},
     "gpt-4o": {"model_tpm_per_ptu": 2500, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 2.5, "paygo_cached_per_1m": 1.25, "paygo_output_per_1m": 10.0},
     "Llama-3.3-70B": {"model_tpm_per_ptu": 8450, "output_weight": 4.0, "min_ptu_commit": 100, "ptu_scale_increment": 100, "regional_min_ptu_commit": 100, "regional_ptu_scale_increment": 100, "available_deployments": ["Global"]},
@@ -168,6 +193,29 @@ def paygo_rates(preset, deployment_type):
     base_input = preset.get("paygo_input_per_1m", DEFAULTS["paygo_input_per_1m"])
     base_cached = preset.get("paygo_cached_per_1m", DEFAULTS["paygo_cached_per_1m"])
     base_output = preset.get("paygo_output_per_1m", DEFAULTS["paygo_output_per_1m"])
+    return (round(base_input * m, 4), round(base_cached * m, 4), round(base_output * m, 4))
+
+
+def model_supports_priority(preset):
+    """Return True if the model preset has confirmed priority-processing rates."""
+    return preset.get("priority_input_per_1m") is not None and preset.get("priority_output_per_1m") is not None
+
+
+def priority_rates(preset, deployment_type):
+    """Return tier-adjusted (input, cached, output) priority $/1M, or ``None``.
+
+    Returns ``None`` when the model preset has no confirmed priority rates (i.e.
+    the model does not offer priority processing, e.g. gpt-4.1-nano / gpt-4o /
+    Custom). The stored rates are the **Global** priority base; Data Zone
+    priority is exactly 10% higher (PAYGO_DEPLOYMENT_MULTIPLIER). Priority is not
+    offered on Regional deployments regardless of these rates.
+    """
+    if not model_supports_priority(preset):
+        return None
+    m = paygo_multiplier(deployment_type)
+    base_input = preset["priority_input_per_1m"]
+    base_cached = preset.get("priority_cached_per_1m", 0.0)
+    base_output = preset["priority_output_per_1m"]
     return (round(base_input * m, 4), round(base_cached * m, 4), round(base_output * m, 4))
 
 
@@ -390,6 +438,32 @@ def calculate(values):
         (output_tokens_monthly / 1_000_000) * values["paygo_output_per_1m"]
     )
 
+    # Priority processing cost lane. Priority is a Standard service tier billed
+    # per token at a higher "priority tier" rate. When confirmed per-model
+    # priority rates are supplied (`priority_*_per_1m`) the lane is priced from
+    # them directly; otherwise it falls back to the editable multiplier over the
+    # PAYGO total (for a Custom preset with no confirmed rates). Only Global and
+    # Data Zone (US) Standard deployments support it; for unsupported deployment
+    # types or models the figure is still computed for reference but flagged via
+    # `priority_supported` so the UI can mark it not applicable.
+    priority_multiplier = values.get("priority_multiplier", DEFAULTS["priority_multiplier"])
+    priority_input_per_1m = values.get("priority_input_per_1m")
+    priority_output_per_1m = values.get("priority_output_per_1m")
+    if priority_input_per_1m is not None and priority_output_per_1m is not None:
+        priority_cached_per_1m = values.get("priority_cached_per_1m")
+        if priority_cached_per_1m is None:
+            priority_cached_per_1m = paygo_cached_per_1m * priority_multiplier
+        priority_monthly = (
+            (input_tokens_monthly / 1_000_000) * priority_input_per_1m +
+            (cached_input_tokens_monthly / 1_000_000) * priority_cached_per_1m +
+            (output_tokens_monthly / 1_000_000) * priority_output_per_1m
+        )
+        priority_rate_source = "confirmed"
+    else:
+        priority_monthly = paygo_monthly * priority_multiplier
+        priority_rate_source = "multiplier"
+    priority_ok = values.get("priority_supported", True)
+
     ptu_hourly_monthly = recommended_ptu * values["ptu_hourly_price"] * values["hours_per_month"]
     ptu_monthly_reserved = ptu_hourly_monthly * (1 - reservation_discount_monthly)
     ptu_yearly_reserved = ptu_hourly_monthly * (1 - reservation_discount_yearly)
@@ -472,6 +546,10 @@ def calculate(values):
         "cached_input_tokens_monthly": cached_input_tokens_monthly,
         "output_tokens_monthly": output_tokens_monthly,
         "paygo_monthly": paygo_monthly,
+        "priority_monthly": priority_monthly,
+        "priority_multiplier": priority_multiplier,
+        "priority_rate_source": priority_rate_source,
+        "priority_supported": priority_ok,
         "ptu_hourly_monthly": ptu_hourly_monthly,
         "ptu_monthly_reserved": ptu_monthly_reserved,
         "ptu_yearly_reserved": ptu_yearly_reserved,

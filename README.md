@@ -120,6 +120,7 @@ The two are **complementary, not competing**. Microsoft's calculator is the auth
 | **PTU vs PAYGO cost** | Side-by-side comparison with break-even made explicit | Not the focus |
 | **Burstiness** | Models steady baseline vs peak (P95 multiplier + baseline load factor) so you size to baseline, not peak | Sizes to the throughput you enter |
 | **Spillover** | Flags feasibility by deployment type (Global/Data Zone vs Regional) | Not addressed |
+| **Priority processing** | Confirmed per-model priority-tier rates as a fourth cost lane, gated by model + deployment type | Not addressed |
 | **Reservations** | 1-month / 1-year discount folded into the cost story | Not addressed |
 | **Transparency** | Open-source formulas, editable assumptions, notebook | Hosted, fixed logic |
 | **Pricing/throughput authority** | Directional — verify before quoting | ✅ Authoritative and current |
@@ -328,7 +329,7 @@ the app / official Azure PTU calculator before committing capacity.
 Given workload inputs (average RPM, input/output tokens per request, P95 multiplier, prompt cache rate, etc.) and cost assumptions, the tool:
 
 1. Estimates a steady-state **baseline PTU** recommendation and a **peak reference PTU** figure.
-2. Compares **PTU vs PAYGO** monthly cost.
+2. Compares four monthly cost lanes side by side: **PTU** (reserved), **PAYGO** (Standard), **PTU + spillover** (blended), and **Priority processing** (Standard's low-latency tier). Priority is priced from confirmed per-model rates and only shows a figure when the model and deployment type support it (see [Priority processing](#priority-processing-the-fourth-cost-lane)).
 3. Suggests an architecture pattern based on burstiness (PTU-first, PTU + Standard spillover, or PAYGO / smaller PTU pilot). Automatic spillover is only offered on Global and Data Zone deployments, so a Regional deployment with a bursty profile is flagged for *manual overflow* instead.
 
 The guiding principle: size PTU for the steady-state baseline, use Standard/PAYGO for spillover, and treat reservation as a billing optimization **after** workload validation — not as the first step.
@@ -371,6 +372,28 @@ Take **one** steady workload and change **only the Deployment type** to see why 
 Two effects make Regional the most expensive: the larger **minimum / increment** rounds the 120-PTU need up to **150 PTUs**, and the **hourly price doubles** — together pushing the committed cost to **~2.5× Global** for identical traffic. The **PAYGO column also steps up** with the deployment type — Data Zone and Regional Standard token rates are exactly **10% higher** than Global (~$21,700 → ~$23,900) — but it stays well below the committed PTU cost and remains the breakeven reference.
 
 Note the recommendation is **burst-driven, not a pure cost minimizer**: at 60 RPM with confirmed gpt-4.1 PAYGO rates ($2 in / $8 out), pay-as-you-go is actually cheaper than *any* PTU commit, so PTU here is justified by predictable latency/throughput and burst protection rather than raw cost. PTU economics improve for steadier, higher-volume traffic and for pricier models. Across all of that, the deployment-type ordering is constant: **Global is cheapest with the broadest region coverage; Data Zone is a 10% premium for EU/US data-zone routing; Regional is the costly last resort** you pick only when data residency mandates it (and recall Regional has **no automatic spillover**).
+
+### Priority processing: the fourth cost lane
+
+**Priority processing** is the Standard service tier's low-latency option: the *same model*, billed per token at a higher "priority tier" rate in exchange for a defined latency target — with **no PTU commitment**. The tool prices this lane from **confirmed per-model rates** (not a single flat multiplier), so it carries the same rigor as the Standard/PAYGO rates. The stored rates are the **Global** base; **Data Zone priority is exactly 10% higher**, mirroring how Standard rates step up by deployment type.
+
+Confirmed Global rates (USD / 1M tokens), shown next to the Standard rate for contrast:
+
+| Model | Standard in / out | **Priority in / out** | Priority premium |
+| --- | --- | --- | --- |
+| gpt-5.2 | $1.75 / $14.00 | **$3.50 / $28.00** | ~2.0× |
+| gpt-5.1 | $1.25 / $10.00 | **$2.50 / $20.00** | ~2.0× |
+| gpt-5 | $1.25 / $10.00 | **$2.50 / $20.00** | ~2.0× |
+| gpt-5-mini | $0.25 / $2.00 | **$0.45 / $3.60** | ~1.8× |
+| gpt-4.1 | $2.00 / $8.00 | **$3.50 / $14.00** | ~1.75× |
+| gpt-4.1-mini | $0.40 / $1.60 | **$0.70 / $2.80** | ~1.75× |
+
+**Gating — the lane shows a dollar figure only when both conditions hold:**
+
+- **Supported model** — one of the six above (the gpt-5.x and gpt-4.1 families). `gpt-4.1-nano`, `gpt-4o`, and `Llama-3.3-70B` have **no priority rate** on the pricing page, so the lane reads **n/a** for them.
+- **Supported deployment type** — **Global or Data Zone (US) Standard** only. On **Regional** the lane is **n/a** (priority is not offered there).
+
+When you pick a Custom (non-preset) model that has no confirmed priority rate, the tool falls back to an editable multiplier over the PAYGO total so the lane still produces a directional number. As always, verify the live [pricing page](https://azure.microsoft.com/en-us/pricing/details/cognitive-services/openai-service/) before quoting.
 
 ## Top PTU mistakes this tool prevents
 

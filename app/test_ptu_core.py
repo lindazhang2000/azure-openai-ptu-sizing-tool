@@ -17,6 +17,9 @@ from ptu_core import (
     deployment_minimums,
     paygo_multiplier,
     paygo_rates,
+    model_supports_priority,
+    priority_rates,
+    priority_supported,
     region_supported,
     spillover_supported,
 )
@@ -133,6 +136,79 @@ def test_min_ptu_commit_floor_applies_for_tiny_workload():
     vals = {**DEFAULTS, "avg_rpm": 1, "min_ptu_commit": 15}
     r = calculate(vals)
     assert r["recommended_ptu"] == 15
+
+
+def test_priority_lane_scales_paygo_by_multiplier():
+    r = calculate(DEFAULTS)
+    # Priority = PAYGO token volume billed at the priority tier multiplier.
+    assert r["priority_multiplier"] == pytest.approx(DEFAULTS["priority_multiplier"])
+    assert r["priority_monthly"] == pytest.approx(r["paygo_monthly"] * DEFAULTS["priority_multiplier"])
+    # A priority premium (>1x) costs more than plain PAYGO.
+    assert r["priority_monthly"] > r["paygo_monthly"]
+
+
+def test_priority_multiplier_is_editable():
+    r = calculate({**DEFAULTS, "priority_multiplier": 2.5})
+    assert r["priority_monthly"] == pytest.approx(r["paygo_monthly"] * 2.5)
+
+
+def test_priority_supported_only_global_and_data_zone():
+    assert priority_supported("Global") is True
+    assert priority_supported("Data Zone") is True
+    assert priority_supported("Regional") is False
+    # The flag flows through calculate() for the UI to mark it not applicable.
+    assert calculate({**DEFAULTS, "priority_supported": False})["priority_supported"] is False
+
+
+def test_model_supports_priority_only_for_models_with_confirmed_rates():
+    assert model_supports_priority(MODEL_PRESETS["gpt-4.1"]) is True
+    assert model_supports_priority(MODEL_PRESETS["gpt-5"]) is True
+    # Models with no priority column on the pricing page lack the rates.
+    assert model_supports_priority(MODEL_PRESETS["gpt-4.1-nano"]) is False
+    assert model_supports_priority(MODEL_PRESETS["gpt-4o"]) is False
+    assert model_supports_priority(MODEL_PRESETS["Llama-3.3-70B"]) is False
+    # A Custom preset (empty) has no priority rates.
+    assert model_supports_priority({}) is False
+
+
+def test_priority_rates_none_when_model_has_no_priority():
+    assert priority_rates(MODEL_PRESETS["gpt-4.1-nano"], "Global") is None
+    assert priority_rates({}, "Global") is None
+
+
+def test_priority_rates_data_zone_is_ten_percent_above_global():
+    g_in, g_cached, g_out = priority_rates(MODEL_PRESETS["gpt-4.1"], "Global")
+    d_in, d_cached, d_out = priority_rates(MODEL_PRESETS["gpt-4.1"], "Data Zone")
+    assert (g_in, g_cached, g_out) == pytest.approx((3.50, 0.88, 14.0))
+    assert d_in == pytest.approx(g_in * 1.10)
+    assert d_cached == pytest.approx(g_cached * 1.10)
+    assert d_out == pytest.approx(g_out * 1.10)
+
+
+def test_priority_lane_uses_confirmed_rates_when_supplied():
+    prio_in, prio_cached, prio_out = priority_rates(MODEL_PRESETS["gpt-4.1"], "Global")
+    vals = {
+        **DEFAULTS,
+        "priority_input_per_1m": prio_in,
+        "priority_cached_per_1m": prio_cached,
+        "priority_output_per_1m": prio_out,
+    }
+    r = calculate(vals)
+    assert r["priority_rate_source"] == "confirmed"
+    expected = (
+        (r["input_tokens_monthly"] / 1_000_000) * prio_in +
+        (r["cached_input_tokens_monthly"] / 1_000_000) * prio_cached +
+        (r["output_tokens_monthly"] / 1_000_000) * prio_out
+    )
+    assert r["priority_monthly"] == pytest.approx(expected)
+    # Confirmed rates are not a flat multiple of the PAYGO total.
+    assert r["priority_monthly"] != pytest.approx(r["paygo_monthly"] * DEFAULTS["priority_multiplier"])
+
+
+def test_priority_lane_falls_back_to_multiplier_without_confirmed_rates():
+    r = calculate(DEFAULTS)
+    assert r["priority_rate_source"] == "multiplier"
+    assert r["priority_monthly"] == pytest.approx(r["paygo_monthly"] * DEFAULTS["priority_multiplier"])
 
 
 def test_zero_throughput_is_safe():

@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 import ptu_core
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, paygo_rates, region_data_source, region_supported, spillover_supported
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, spillover_supported
 
 st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
 
@@ -55,6 +55,9 @@ DEPENDENT_KEYS = [
     "paygo_input_per_1m",
     "paygo_cached_per_1m",
     "paygo_output_per_1m",
+    "priority_input_per_1m",
+    "priority_cached_per_1m",
+    "priority_output_per_1m",
 ]
 
 
@@ -63,6 +66,13 @@ def compute_defaults(selected_model, deployment_type, foundry_mode):
     preset = MODEL_PRESETS.get(selected_model, {})
     eff_min_ptu, eff_increment = deployment_minimums(preset, deployment_type)
     paygo_in, paygo_cached, paygo_out = paygo_rates(preset, deployment_type)
+    # Confirmed per-model priority rates when the model offers priority
+    # processing; otherwise seed the fields from PAYGO x the multiplier fallback.
+    prio = priority_rates(preset, deployment_type)
+    if prio is None:
+        _pm = float(DEFAULTS["priority_multiplier"])
+        prio = (paygo_in * _pm, paygo_cached * _pm, paygo_out * _pm)
+    prio_in, prio_cached, prio_out = prio
     return {
         # Free inputs (only restored by the Reset button).
         "avg_rpm": float(DEFAULTS["avg_rpm"]),
@@ -88,6 +98,9 @@ def compute_defaults(selected_model, deployment_type, foundry_mode):
         "paygo_input_per_1m": float(paygo_in),
         "paygo_cached_per_1m": float(paygo_cached),
         "paygo_output_per_1m": float(paygo_out),
+        "priority_input_per_1m": float(prio_in),
+        "priority_cached_per_1m": float(prio_cached),
+        "priority_output_per_1m": float(prio_out),
     }
 
 
@@ -230,6 +243,19 @@ with left:
             paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, step=0.01, key="paygo_output_per_1m")
         with b7:
             hours_per_month = st.number_input("Hours per month", min_value=1.0, step=1.0, key="hours_per_month")
+        model_has_priority = model_supports_priority(preset)
+        prio_help = (
+            "Confirmed priority-tier rate for this model. Global base; Data Zone is 10% higher."
+            if model_has_priority
+            else "This model has no confirmed priority rate; the field is seeded from PAYGO x the fallback premium and the lane is marked not applicable."
+        )
+        b8, b9, b10 = st.columns(3)
+        with b8:
+            priority_input_per_1m = st.number_input("Priority input / 1M tokens (USD)", min_value=0.0, step=0.01, key="priority_input_per_1m", help=prio_help)
+        with b9:
+            priority_cached_per_1m = st.number_input("Priority cached input / 1M (USD)", min_value=0.0, step=0.01, key="priority_cached_per_1m", help="Cached prompt tokens billed at the priority tier's discounted rate.")
+        with b10:
+            priority_output_per_1m = st.number_input("Priority output / 1M tokens (USD)", min_value=0.0, step=0.01, key="priority_output_per_1m", help=prio_help)
 
 values = {
     "avg_rpm": avg_rpm,
@@ -250,8 +276,12 @@ values = {
     "paygo_input_per_1m": paygo_input_per_1m,
     "paygo_cached_per_1m": paygo_cached_per_1m,
     "paygo_output_per_1m": paygo_output_per_1m,
+    "priority_input_per_1m": priority_input_per_1m,
+    "priority_cached_per_1m": priority_cached_per_1m,
+    "priority_output_per_1m": priority_output_per_1m,
     "hours_per_month": hours_per_month,
     "spillover_supported": spillover_supported(deployment_type),
+    "priority_supported": priority_supported(deployment_type) and model_supports_priority(preset),
 }
 calc = calculate(values)
 
@@ -271,12 +301,43 @@ with right:
     st.info(calc['reservation_note'])
 
 st.subheader("Monthly cost comparison")
-m1, m2, m3, m4 = st.columns(4)
+m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("PTU monthly (1-mo reserved)", f'${calc["ptu_monthly"]:,.0f}', help=f'Hourly list: ${calc["ptu_hourly_monthly"]:,.0f}/mo before any reservation discount.')
 m2.metric("PAYGO monthly", f'${calc["paygo_monthly"]:,.0f}')
 m3.metric("PTU + spillover", f'${calc["blended_monthly"]:,.0f}', delta=f'{calc["spill_fraction"]*100:,.1f}% on Standard', delta_color="off", help=f'Reserved PTU baseline plus PAYGO for the ~{calc["spill_fraction"]*100:,.1f}% of monthly demand that exceeds provisioned capacity, given the peak-minutes duty cycle.')
+if calc["priority_supported"]:
+    _prio_premium = (calc["priority_monthly"] / calc["paygo_monthly"] - 1) * 100 if calc["paygo_monthly"] else 0.0
+    _prio_src = "confirmed per-model rates" if calc["priority_rate_source"] == "confirmed" else f'~{calc["priority_multiplier"]:.2f}x PAYGO fallback'
+    m4.metric("Priority processing", f'${calc["priority_monthly"]:,.0f}', delta=f'+{_prio_premium:,.0f}% vs PAYGO', delta_color="off", help=f'Standard token volume billed at the priority tier ({_prio_src}) for a defined latency target with no PTU commitment.')
+else:
+    m4.metric("Priority processing", "n/a", help='Priority processing requires a supported model (gpt-5.x / gpt-4.1 family) on a Global or Data Zone (US) Standard deployment.')
 delta_label = "PTU saves" if calc["savings_delta"] >= 0 else "PAYGO saves"
-m4.metric(delta_label, f'${abs(calc["savings_delta"]):,.0f}')
+m5.metric(delta_label, f'${abs(calc["savings_delta"]):,.0f}')
+
+st.caption(
+    "**Priority processing** requires a model version of **2025-12-01 or later** and is offered only on **Global** and **Data Zone (US) Standard** deployments — Data Zone priority covers **US data zones only**. Confirm the live pricing page before quoting."
+)
+
+# Side-by-side view of the monthly cost lanes so the comparison is visual, not
+# just the metric tiles above. Priority is only charted when it applies.
+cost_rows = [
+    {"Lane": "PTU (reserved)", "Monthly $": calc["ptu_monthly"]},
+    {"Lane": "PAYGO", "Monthly $": calc["paygo_monthly"]},
+    {"Lane": "PTU + spillover", "Monthly $": calc["blended_monthly"]},
+]
+if calc["priority_supported"]:
+    cost_rows.append({"Lane": "Priority", "Monthly $": calc["priority_monthly"]})
+cost_chart_df = pd.DataFrame(cost_rows)
+cost_chart = (
+    alt.Chart(cost_chart_df)
+    .mark_bar()
+    .encode(
+        x=alt.X("Lane:N", sort=[r["Lane"] for r in cost_rows], title=None),
+        y=alt.Y("Monthly $:Q", title="Monthly cost (USD)"),
+        tooltip=["Lane", alt.Tooltip("Monthly $:Q", format=",.0f")],
+    )
+)
+st.altair_chart(cost_chart, use_container_width=True)
 
 pricing_df = pd.DataFrame([
     {
