@@ -86,7 +86,7 @@ The core decision this tool informs — pick the row that matches the workload's
 | Path | Contents |
 | --- | --- |
 | [app/](app) | The PTU sizing tool: Streamlit app, notebook, README, requirements, and the bundled `region_data.json` snapshot. |
-| [scripts/](scripts) | Operations: `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` (regenerate region availability from the Azure Models API), `token_usage.py` (per-deployment / per-model token usage across the subscription), and `region-refresh-job.yaml` (the daily Container Apps Job definition). |
+| [scripts/](scripts) | Operations: `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` (regenerate region availability from the Azure Models API), `token_usage.py` (per-deployment / per-model token usage across the subscription), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), and `region-refresh-job.yaml` (the daily Container Apps Job definition). |
 
 ## Running the tool
 
@@ -204,6 +204,27 @@ preset matched, so defaults were used).
 > `PT1H` can be `~3,150/min` at `PT5M` — roughly 6× higher — because the hourly bucket
 > averages the spike away. Size PTU capacity against the **fine-grained peak
 > tokens/min**, not the period average, or you will under-provision for real bursts.
+
+### Optional: auto-fill the sizing inputs from observed usage
+
+[scripts/usage_to_sizing.py](scripts/usage_to_sizing.py) is a **standalone, optional**
+bridge — it is deliberately *not* wired into the app — that turns a usage report into
+the workload inputs the sizing tool expects, so you can start from real traffic
+instead of typing numbers. It derives the average and peak throughput and the burst
+ratio per deployment, matches the model preset, and (with `--calculate`) runs the same
+`ptu_core` logic the app uses.
+
+```bash
+python scripts/usage_to_sizing.py --demo --calculate          # synthetic, no Azure
+python scripts/usage_to_sizing.py --from-json usage.json --calculate
+python scripts/usage_to_sizing.py --from-json usage.json --out-json sizing-inputs.json
+```
+
+Azure Monitor's token metrics don't expose request counts, so the *average
+tokens/min* is what's grounded in real data; `--avg-rpm` is only a nominal divisor
+used to express that as "requests × per-request tokens" and does **not** change the
+recommended PTU. Treat the output as a directional starting point and validate it in
+the app / official Azure PTU calculator before committing capacity.
 
 ## What the tool does
 

@@ -42,3 +42,5 @@ token_usage.csv
 token_usage.json
 demo-usage.csv
 demo-usage.json
+# Derived sizing inputs (scripts/usage_to_sizing.py)
+sizing-inputs.json
