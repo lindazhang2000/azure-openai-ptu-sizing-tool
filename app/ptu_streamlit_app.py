@@ -202,28 +202,69 @@ with left:
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        avg_rpm = st.number_input("Average RPM" if not foundry_mode else "Peak RPM", min_value=0.0, step=1.0, key="avg_rpm")
-        avg_input_tokens = st.number_input("Average input tokens / request", min_value=0.0, step=1.0, key="avg_input_tokens")
+        avg_rpm = st.number_input(
+            "Average RPM" if not foundry_mode else "Peak RPM",
+            min_value=0.0,
+            step=1.0,
+            key="avg_rpm",
+            help=("Sustained requests per minute at the workload's peak — size PTUs to this." if foundry_mode else "Sustained requests per minute on an average minute. Spikes are handled separately via the P95 multiplier, not by inflating this number."),
+        )
+        avg_input_tokens = st.number_input(
+            "Average input tokens / request",
+            min_value=0.0,
+            step=1.0,
+            key="avg_input_tokens",
+            help="Mean prompt size per request (system + user + context). Drives input-token throughput and PAYGO input cost.",
+        )
     with c2:
-        avg_output_tokens = st.number_input("Average output tokens / request", min_value=0.0, step=1.0, key="avg_output_tokens")
-        p95_multiplier = st.slider("P95 load multiplier", min_value=1.0, max_value=5.0, step=0.1, disabled=foundry_mode, key="p95_multiplier")
+        avg_output_tokens = st.number_input(
+            "Average output tokens / request",
+            min_value=0.0,
+            step=1.0,
+            key="avg_output_tokens",
+            help="Mean completion size per request. Output tokens are weighted more heavily for PTU sizing (see Output weighting) and usually cost more per token.",
+        )
+        p95_multiplier = st.slider(
+            "P95 load multiplier",
+            min_value=1.0,
+            max_value=5.0,
+            step=0.1,
+            disabled=foundry_mode,
+            key="p95_multiplier",
+            help="How much higher the 95th-percentile minute runs versus the average minute. 2.0 means peak traffic is twice the average. Sets the peak reference PTUs and the burst ratio.",
+        )
     with c3:
-        cache_rate = st.slider("Prompt cache rate", min_value=0.0, max_value=0.9, step=0.05, key="cache_rate")
-        baseline_load_factor = st.slider("Baseline load factor", min_value=0.4, max_value=1.0, step=0.05, disabled=foundry_mode, key="baseline_load_factor")
+        cache_rate = st.slider(
+            "Prompt cache rate",
+            min_value=0.0,
+            max_value=0.9,
+            step=0.05,
+            key="cache_rate",
+            help="Fraction of input tokens served from the prompt cache. Cached tokens are billed at the cheaper cached rate, lowering effective input cost.",
+        )
+        baseline_load_factor = st.slider(
+            "Baseline load factor",
+            min_value=0.4,
+            max_value=1.0,
+            step=0.05,
+            disabled=foundry_mode,
+            key="baseline_load_factor",
+            help="Share of average demand to provision as steady-state PTU baseline. Below 1.0 deliberately under-provisions and lets spikes spill to Standard — the field-guidance default.",
+        )
         peak_minutes_fraction = st.slider("Peak minutes fraction", min_value=0.0, max_value=1.0, step=0.05, key="peak_minutes_fraction", help="Share of minutes the workload runs at its P95 peak (vs. its average minute). Drives how much traffic spills to Standard in the blended cost.")
 
     with st.expander("Advanced assumptions", expanded=True):
         a1, a2, a3, a4, a5 = st.columns(5)
         with a1:
-            model_tpm_per_ptu = st.number_input("Model TPM per PTU", min_value=1.0, step=1.0, disabled=bool(preset), key="model_tpm_per_ptu")
+            model_tpm_per_ptu = st.number_input("Model TPM per PTU", min_value=1.0, step=1.0, disabled=bool(preset), key="model_tpm_per_ptu", help="Tokens per minute one PTU delivers for this model (from the official PTU tables). Higher means fewer PTUs for the same throughput. Locked when a model preset is selected.")
         with a2:
-            output_weight = st.number_input("Output weighting", min_value=0.0, step=0.1, disabled=bool(preset), key="output_weight")
+            output_weight = st.number_input("Output weighting", min_value=0.0, step=0.1, disabled=bool(preset), key="output_weight", help="How many input-token-equivalents one output token costs for sizing. Output is more compute-intensive, so this is usually >1. Locked under a preset.")
         with a3:
-            safety_buffer = st.number_input("Safety buffer", min_value=0.0, step=0.01, format="%.2f", disabled=foundry_mode, key="safety_buffer")
+            safety_buffer = st.number_input("Safety buffer", min_value=0.0, step=0.01, format="%.2f", disabled=foundry_mode, key="safety_buffer", help="Headroom added on top of the computed baseline PTUs (e.g. 0.15 = +15%) to absorb estimation error. Set to 0 in Foundry-match mode.")
         with a4:
-            min_ptu_commit = st.number_input("Minimum PTU commit", min_value=0.0, step=1.0, disabled=bool(preset), key="min_ptu_commit")
+            min_ptu_commit = st.number_input("Minimum PTU commit", min_value=0.0, step=1.0, disabled=bool(preset), key="min_ptu_commit", help="Smallest PTU count this deployment type can be provisioned at. The recommendation is rounded up to at least this. Locked under a preset.")
         with a5:
-            ptu_scale_increment = st.number_input("PTU scale increment", min_value=1.0, step=1.0, disabled=bool(preset), key="ptu_scale_increment")
+            ptu_scale_increment = st.number_input("PTU scale increment", min_value=1.0, step=1.0, disabled=bool(preset), key="ptu_scale_increment", help="Step size PTUs are sold in above the minimum (e.g. 5). The recommendation is rounded up to a multiple of this. Locked under a preset.")
 
     with st.expander("Cost assumptions", expanded=True):
         st.caption("Hourly price is differentiated by deployment type (Global lowest → Data Zone → Regional); reservation prices do not vary by type. Hourly/reservation values confirmed against the Azure OpenAI pricing page (Provisioned table). PAYGO defaults track the selected model **and** deployment type — Global Standard base, with Data Zone/Regional Standard exactly 10% higher (confirmed). Re-verify before quoting.")
@@ -240,9 +281,9 @@ with left:
         with b5:
             paygo_cached_per_1m = st.number_input("PAYGO cached input / 1M (USD)", min_value=0.0, step=0.01, key="paygo_cached_per_1m", help="Cached prompt tokens are billed at a discounted rate, not free.")
         with b6:
-            paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, step=0.01, key="paygo_output_per_1m")
+            paygo_output_per_1m = st.number_input("PAYGO output / 1M tokens (USD)", min_value=0.0, step=0.01, key="paygo_output_per_1m", help="Standard pay-as-you-go output-token rate for this model and deployment type.")
         with b7:
-            hours_per_month = st.number_input("Hours per month", min_value=1.0, step=1.0, key="hours_per_month")
+            hours_per_month = st.number_input("Hours per month", min_value=1.0, step=1.0, key="hours_per_month", help="Hours used to convert hourly PTU pricing to a monthly figure (730 = a full month). Lower it to model part-time or business-hours-only running.")
         model_has_priority = model_supports_priority(preset)
         prio_help = (
             "Confirmed priority-tier rate for this model. Global base; Data Zone is 10% higher."
@@ -288,12 +329,12 @@ calc = calculate(values)
 with right:
     st.subheader("Outputs")
     k1, k2 = st.columns(2)
-    k1.metric("Recommended PTUs", f'{calc["recommended_ptu"]:,.0f}')
-    k2.metric("Peak reference PTUs", f'{calc["peak_reference_ptu"]:,.0f}')
+    k1.metric("Recommended PTUs", f'{calc["recommended_ptu"]:,.0f}', help="Baseline PTUs to provision: average demand x baseline load factor, plus safety buffer, rounded up to the deployment's minimum and scale increment. Size to this, not to peak.")
+    k2.metric("Peak reference PTUs", f'{calc["peak_reference_ptu"]:,.0f}', help="PTUs the P95 peak alone would need (average x P95 multiplier). The gap above Recommended PTUs is what spills to Standard or Priority.")
 
-    st.metric("Baseline TPM", f'{calc["baseline_tpm"]:,.0f}')
-    st.metric("P95 TPM", f'{calc["p95_tpm"]:,.0f}')
-    st.metric("Burst ratio (P95 / average)", f'{calc["burst_ratio"]:,.2f}x')
+    st.metric("Baseline TPM", f'{calc["baseline_tpm"]:,.0f}', help="Total tokens per minute at the provisioned baseline (input + output-weighted), net of prompt cache.")
+    st.metric("P95 TPM", f'{calc["p95_tpm"]:,.0f}', help="Tokens per minute at the 95th-percentile peak minute — baseline TPM x P95 multiplier.")
+    st.metric("Burst ratio (P95 / average)", f'{calc["burst_ratio"]:,.2f}x', help="Peak-to-average ratio. Higher = spikier traffic, which favors a smaller PTU baseline with spillover over provisioning for the peak.")
 
     st.markdown(f"### {calc['architecture']['badge']} {calc['architecture']['label']}")
     st.write(calc['architecture']['summary'])
@@ -303,7 +344,7 @@ with right:
 st.subheader("Monthly cost comparison")
 m1, m2, m3, m4, m5 = st.columns(5)
 m1.metric("PTU monthly (1-mo reserved)", f'${calc["ptu_monthly"]:,.0f}', help=f'Hourly list: ${calc["ptu_hourly_monthly"]:,.0f}/mo before any reservation discount.')
-m2.metric("PAYGO monthly", f'${calc["paygo_monthly"]:,.0f}')
+m2.metric("PAYGO monthly", f'${calc["paygo_monthly"]:,.0f}', help='Pure pay-as-you-go: every token billed at Standard rates, no PTU commitment. The break-even reference for the other lanes.')
 m3.metric("PTU + spillover", f'${calc["blended_monthly"]:,.0f}', delta=f'{calc["spill_fraction"]*100:,.1f}% on Standard', delta_color="off", help=f'Reserved PTU baseline plus PAYGO for the ~{calc["spill_fraction"]*100:,.1f}% of monthly demand that exceeds provisioned capacity, given the peak-minutes duty cycle.')
 if calc["priority_supported"]:
     _prio_premium = (calc["priority_monthly"] / calc["paygo_monthly"] - 1) * 100 if calc["paygo_monthly"] else 0.0
@@ -312,7 +353,7 @@ if calc["priority_supported"]:
 else:
     m4.metric("Priority processing", "n/a", help='Priority processing requires a supported model (gpt-5.x / gpt-4.1 family) on a Global or Data Zone (US) Standard deployment.')
 delta_label = "PTU saves" if calc["savings_delta"] >= 0 else "PAYGO saves"
-m5.metric(delta_label, f'${abs(calc["savings_delta"]):,.0f}')
+m5.metric(delta_label, f'${abs(calc["savings_delta"]):,.0f}', help='Monthly difference between the PTU (reserved) and PAYGO lanes. "PTU saves" means reserving is cheaper at this volume; "PAYGO saves" means usage is too low or too spiky to justify a reservation.')
 
 st.caption(
     "**Priority processing** requires a model version of **2025-12-01 or later** and is offered only on **Global** and **Data Zone (US) Standard** deployments — Data Zone priority covers **US data zones only**. Confirm the live pricing page before quoting."
