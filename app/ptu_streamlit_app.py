@@ -524,8 +524,8 @@ if _be["rows"]:
         )
     else:
         st.caption(
-            f"Across the charted range PAYGO stays cheaper than the **{_be_tier}** PTU baseline (green band) — this workload is below the PTU break-even. "
-            f"Current load: {_be['current_rpm']:,.0f} RPM (grey dashed). Try the yearly tier to lower the PTU line."
+            f"Across the charted range PAYGO stays cheaper on price than the **{_be_tier}** PTU baseline (green band) — this workload sits below the PTU cost break-even. "
+            f"Current load: {_be['current_rpm']:,.0f} RPM (grey dashed). PTU can still be worth it for guaranteed throughput, steady latency, and no 429 throttling — or try the yearly tier to lower the PTU line."
         )
 
 # One-click shareable report — a self-contained HTML file stakeholders can open
