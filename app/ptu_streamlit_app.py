@@ -441,12 +441,7 @@ if _be["rows"]:
             .mark_rule(color="#0a6ed1")
             .encode(x="RPM:Q")
         )
-    be_chart = (
-        alt.layer(*be_layers)
-        .properties(height=320, padding={"left": 5, "top": 5, "right": 5, "bottom": 24})
-        .configure_axisX(titlePadding=14)
-        .configure_view(continuousHeight=320)
-    )
+    be_chart = alt.layer(*be_layers).properties(height=360, padding={"left": 5, "top": 5, "right": 5, "bottom": 45})
     st.altair_chart(be_chart, width="stretch")
     if _be["breakeven_rpm"]:
         _be_side = "above" if _be["current_rpm"] >= _be["breakeven_rpm"] else "below"
