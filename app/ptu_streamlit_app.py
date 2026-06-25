@@ -157,6 +157,7 @@ if not st.session_state.get("_tour_dismissed", False):
             st.markdown("**2 · Read the recommendation**  \nThe right panel gives **Recommended PTUs**, the **architecture pattern** (PTU-first / spillover / PAYGO), and the throughput behind it.")
         with t3:
             st.markdown("**3 · Compare cost & share**  \nThe **Monthly cost comparison** weighs PTU vs PAYGO vs spillover vs Priority. Use **📄 Export shareable report** to hand stakeholders a PDF.")
+        st.markdown("**Two ways to feed this:** type estimates below, or import real usage via the KQL recipe (see README).")
         st.caption("Tip: start from a model preset — it fills throughput, minimum commit, and pricing for you. Toggle **Match Foundry calculator** to size for peak like the official tool. Guidance is directional; confirm final numbers in the official Azure PTU calculator before committing.")
         st.button("Got it — hide this", on_click=_dismiss_tour)
 
