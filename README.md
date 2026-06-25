@@ -19,17 +19,67 @@ description: An interactive Streamlit app and Jupyter notebook that estimate Azu
 [![CI](https://github.com/lindazhang2000/azure-openai-ptu-sizing-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/lindazhang2000/azure-openai-ptu-sizing-tool/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+> ⭐ If this helps you, please star the repo and share with your team.
+
 An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs, compare PTU vs PAYGO cost, and recommend an architecture pattern.
+
+This tool solves the hardest part of PTU adoption:
+
+👉 NOT "how many PTUs"
+👉 but "whether you should even use PTU at all"
+
+It helps you:
+
+- Decide **PTU vs PAYGO vs Hybrid**
+- Avoid over-provisioning
+- Align cost with workload behavior (not guesswork)
+
+> 💡 **Key principle:**
+> PTU should be sized for steady-state **baseline** — not peak demand.
+>
+> Use PAYGO (or Standard) for spikes.
 
 ![Streamlit app screenshot showing workload inputs and the recommended PTU output](docs/app-screenshot.png)
 
-> **Disclaimer:** This tool provides **illustrative and directional guidance only** and is **not an official Azure PTU calculator**. Throughput assumptions, minimum PTU commitments, and pricing are subject to change. Always verify against current Azure documentation before making customer-specific decisions.
+> **Disclaimer:**
+> This tool provides directional guidance only and is not an official Azure calculator.
+> Throughput, pricing, and limits may change. Always validate with Microsoft documentation before making production decisions.
 >
 > **Recommended usage:** Use this tool to support **architecture discussions and initial sizing exploration**. Always validate results with the official Azure OpenAI / Microsoft Foundry PTU calculator and current pricing before any production deployment, reservation, or capacity commitment.
+
+## 🚀 Start here (2-minute quick guide)
+
+1. Open the Streamlit app
+2. Enter:
+   - RPM
+   - Tokens per request
+   - Burst (P95 multiplier)
+3. Look at:
+   - ✅ Architecture recommendation (PTU vs PAYGO vs Hybrid)
+   - ✅ Baseline PTU estimate
+4. Use result to:
+   - Frame architecture discussion
+   - NOT finalize pricing
+
+👉 Always validate final numbers with the official Azure PTU calculator
 
 ## Who this is for
 
 Solution engineers, architects, and customers evaluating **PTU vs PAYGO** for production AI workloads.
+
+## ⚠️ When NOT to use this tool
+
+Avoid using this tool for:
+
+- Final capacity commitments
+- Pricing quotes to customers
+- SLA or performance guarantees
+
+Use it for:
+
+- ✅ Early architecture decisions
+- ✅ PTU vs PAYGO discussions
+- ✅ Customer education
 
 ## What this tool helps decide
 
@@ -40,6 +90,17 @@ From a few workload inputs, it answers the three questions that drive an Azure O
 - **Which architecture?** — PTU-first, PTU + Standard spillover, or PAYGO/pilot, based on burstiness.
 
 Everything below the next two sections is reference depth — read it when you need the formulas, assumptions, and worked scenarios.
+
+## 📈 Business impact
+
+Using this tool helps:
+
+- Reduce over-provisioning risk
+- Accelerate PTU adoption decisions
+- Improve architecture consistency across teams
+- Enable faster customer conversations
+
+→ Leads to better capacity planning and workload alignment
 
 ## Why this vs the official Azure PTU calculator
 
@@ -80,6 +141,15 @@ The core decision this tool informs — pick the row that matches the workload's
 | **Spiky, low baseline** (pilots, internal tools, dev/test) | 🟠 **PAYGO** | A committed PTU deployment would sit idle; usage-based billing is cheaper and simpler. |
 
 > **Rule of thumb:** burst ratio below 2 → PTU; 2–4 → PTU + spillover; 4+ (or a baseline below the model's minimum PTU commit) → PAYGO. PTU is justified by **predictable latency, throughput, and burst protection** — not always by raw cost. See [Example scenarios to try](#example-scenarios-to-try) for worked numbers.
+
+### PTU decision flow
+
+```mermaid
+flowchart TD
+    A[Is the workload steady?] -->|Yes| B[PTU]
+    A -->|Moderate burst| C[PTU + spillover]
+    A -->|Highly spiky| D[PAYGO]
+```
 
 ## Repository layout
 
@@ -240,7 +310,7 @@ The guiding principle: size PTU for the steady-state baseline, use Standard/PAYG
 
 Type these into the **Workload inputs** (the `→` row is calculated for reference, not an input); leave the Advanced and Cost assumptions at their defaults. The architecture recommendation is driven by the **P95 load multiplier** — it expresses your peak versus average load, matching the **peak requests/minute ÷ average requests/minute** ratio used by Microsoft's PTU calculator. Because request size is constant, scaling peak requests/minute scales peak token throughput by the same factor, so the multiplier *is* the burst ratio (e.g. `2.8` = peaks run 2.8x the average).
 
-| Input | A — Steady chatbot | B — Bursty RAG | C — Spiky / low baseline |
+| Input | A — Customer service chatbot (24/7, predictable traffic) | B — Internal copilot / RAG app (morning & meeting spikes) | C — Pilot / internal tool (occasional spikes, low baseline) |
 | --- | --- | --- | --- |
 | Average RPM | 30 | 120 | 15 |
 | Avg input tokens / request | 1200 | 2500 | 900 |
@@ -286,6 +356,8 @@ A handful of sizing mistakes come up again and again. The biggest ones are exact
 - **Using Regional unnecessarily** — the deployment-type comparison exposes Regional's higher minimum and double hourly price, so it's reserved for genuine data-residency needs.
 
 ### Top 10 PTU mistakes (customer leave-behind)
+
+> 🔥 **Most reused section (customer leave-behind)**
 
 Avoid these to get predictable performance, cost control, and confident scale:
 
