@@ -21,6 +21,8 @@ description: An interactive Streamlit app and Jupyter notebook that estimate Azu
 
 > ⭐ If this helps you, please star the repo and share with your team.
 
+> 👉 **Bottom line:** PTU is not a pricing decision — it's an architecture decision.
+
 An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs, compare PTU vs PAYGO cost, and recommend an architecture pattern.
 
 Most teams get PTU wrong — not because of sizing,
