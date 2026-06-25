@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 import ptu_core
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, breakeven_series, build_report_csv, build_report_html, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, spillover_supported
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, PRICING_CONFIRMED_AS_OF, PRICING_SOURCE_URL, available_deployment_types, available_regions, breakeven_series, build_report_csv, build_report_html, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, spillover_supported, validate_inputs
 
 st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
 
@@ -354,6 +354,11 @@ values = {
 }
 calc = calculate(values)
 
+# Surface boundary-condition problems (zero rate, zero tokens, zero pricing,
+# implausibly large requests) so the numbers below are not silently misleading.
+for _issue in validate_inputs(values, foundry_mode):
+    (st.warning if _issue["level"] == "warning" else st.info)(_issue["message"])
+
 with right:
     st.subheader("Outputs")
     k1, k2 = st.columns(2)
@@ -407,6 +412,36 @@ cost_chart = (
     )
 )
 st.altair_chart(cost_chart, width="stretch")
+
+# Read-only provenance panel: the exact rates and assumptions feeding the lanes
+# above, so stakeholders can sanity-check a number without opening the export.
+with st.expander("Pricing assumptions behind these numbers", expanded=False):
+    _assump_rows = [
+        ("PTU hourly price (USD)", f'${values["ptu_hourly_price"]:,.2f}/PTU/hr'),
+        ("Monthly reservation discount", f'{values["reservation_discount_monthly"]*100:,.0f}%'),
+        ("Yearly reservation discount", f'{values["reservation_discount_yearly"]*100:,.0f}%'),
+        ("Hours per month", f'{values["hours_per_month"]:,.0f}'),
+        ("PAYGO input / 1M tokens", f'${values["paygo_input_per_1m"]:,.2f}'),
+        ("PAYGO cached input / 1M", f'${values["paygo_cached_per_1m"]:,.2f}'),
+        ("PAYGO output / 1M tokens", f'${values["paygo_output_per_1m"]:,.2f}'),
+        ("Model TPM per PTU", f'{values["model_tpm_per_ptu"]:,.0f}'),
+        ("Output weighting", f'{values["output_weight"]:,.1f}x'),
+    ]
+    if calc["priority_supported"]:
+        _assump_rows.extend([
+            ("Priority input / 1M tokens", f'${values["priority_input_per_1m"]:,.2f}'),
+            ("Priority output / 1M tokens", f'${values["priority_output_per_1m"]:,.2f}'),
+        ])
+    st.dataframe(
+        pd.DataFrame(_assump_rows, columns=["Assumption", "Value"]),
+        hide_index=True,
+        width="stretch",
+    )
+    st.caption(
+        f"Pricing confirmed against the Azure OpenAI pricing page as of {PRICING_CONFIRMED_AS_OF} — "
+        f"[{PRICING_SOURCE_URL}]({PRICING_SOURCE_URL}). Edit any value in the **Cost assumptions** panel on the left; "
+        "these figures update live and flow into the exported report."
+    )
 
 # Break-even view: PTU is an architecture decision, not just a discount. Sweep
 # the request rate and show where the reserved PTU baseline overtakes PAYGO, so

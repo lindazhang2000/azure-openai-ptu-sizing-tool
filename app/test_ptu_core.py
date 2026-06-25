@@ -719,3 +719,48 @@ def test_reports_omit_breakeven_section_when_absent():
     assert "Break-even decision" not in html_out
 
 
+def test_validate_inputs_clean_defaults_have_no_warnings():
+    issues = ptu_core.validate_inputs(DEFAULTS)
+    assert not any(i["level"] == "warning" for i in issues)
+
+
+def test_validate_inputs_flags_zero_rpm():
+    issues = ptu_core.validate_inputs({**DEFAULTS, "avg_rpm": 0})
+    assert any(i["level"] == "warning" and "RPM" in i["message"] for i in issues)
+
+
+def test_validate_inputs_rpm_label_follows_foundry_mode():
+    peak = ptu_core.validate_inputs({**DEFAULTS, "avg_rpm": 0}, foundry_mode=True)
+    assert any("Peak RPM" in i["message"] for i in peak)
+
+
+def test_validate_inputs_flags_zero_tokens():
+    issues = ptu_core.validate_inputs(
+        {**DEFAULTS, "avg_input_tokens": 0, "avg_output_tokens": 0}
+    )
+    assert any(i["level"] == "warning" and "tokens" in i["message"].lower() for i in issues)
+
+
+def test_validate_inputs_flags_zero_pricing():
+    issues = ptu_core.validate_inputs(
+        {**DEFAULTS, "ptu_hourly_price": 0, "paygo_input_per_1m": 0, "paygo_output_per_1m": 0}
+    )
+    messages = " ".join(i["message"] for i in issues if i["level"] == "warning")
+    assert "PTU hourly price" in messages
+    assert "PAYGO" in messages
+
+
+def test_validate_inputs_warns_on_implausibly_large_request():
+    issues = ptu_core.validate_inputs(
+        {**DEFAULTS, "avg_input_tokens": 150_000, "avg_output_tokens": 100_000}
+    )
+    assert any(i["level"] == "info" and "context window" in i["message"] for i in issues)
+
+
+def test_validate_inputs_flags_underprovisioned_baseline_without_spillover():
+    issues = ptu_core.validate_inputs(
+        {**DEFAULTS, "baseline_load_factor": 0.7, "peak_minutes_fraction": 0}
+    )
+    assert any(i["level"] == "info" and "spillover" in i["message"].lower() for i in issues)
+
+

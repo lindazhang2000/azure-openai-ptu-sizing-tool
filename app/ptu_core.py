@@ -567,6 +567,63 @@ def calculate(values):
     }
 
 
+def validate_inputs(values, foundry_mode=False):
+    """Flag boundary-condition problems with the workload inputs.
+
+    Returns a list of ``{"level": "warning"|"info", "message": str}`` so the UI
+    can surface why a result might be misleading (a zero request rate, zero token
+    counts, zero pricing, an implausibly large request, or a baseline that under-
+    provisions with no spillover modeled). Pure and dependency-free so it is unit
+    testable; the app renders each entry with ``st.warning`` / ``st.info``.
+    """
+    issues = []
+
+    def num(key):
+        try:
+            return float(values.get(key, 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    rpm_label = "Peak RPM" if foundry_mode else "Average RPM"
+    if num("avg_rpm") <= 0:
+        issues.append({
+            "level": "warning",
+            "message": f"{rpm_label} is 0 — enter a request rate to size the workload; throughput and cost are 0 until you do.",
+        })
+
+    in_tok, out_tok = num("avg_input_tokens"), num("avg_output_tokens")
+    if in_tok <= 0 and out_tok <= 0:
+        issues.append({
+            "level": "warning",
+            "message": "Input and output tokens are both 0 — set tokens per request or every cost lane reads $0.",
+        })
+    elif in_tok + out_tok > 200_000:
+        issues.append({
+            "level": "info",
+            "message": f"≈{in_tok + out_tok:,.0f} tokens/request is large — confirm it fits the model's context window.",
+        })
+
+    if num("paygo_input_per_1m") <= 0 and num("paygo_output_per_1m") <= 0:
+        issues.append({
+            "level": "warning",
+            "message": "PAYGO input and output rates are both 0 — the PAYGO and spillover lanes will read $0.",
+        })
+
+    if num("ptu_hourly_price") <= 0:
+        issues.append({
+            "level": "warning",
+            "message": "PTU hourly price is 0 — the PTU and reservation lanes will read $0.",
+        })
+
+    if not foundry_mode and num("baseline_load_factor") < 1.0 and num("peak_minutes_fraction") <= 0:
+        issues.append({
+            "level": "info",
+            "message": "Baseline load factor under-provisions but peak-minutes fraction is 0 — no spillover cost is modeled, so PTU + spillover equals the PTU baseline.",
+        })
+
+    return issues
+
+
 def _breakeven_verdict_text(be):
     """One-line verdict for the break-even section, shared by both report builders.
 
