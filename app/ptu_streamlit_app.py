@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 import ptu_core
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, build_report_html, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, spillover_supported
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, breakeven_series, build_report_csv, build_report_html, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, spillover_supported
 
 st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
 
@@ -408,6 +408,52 @@ cost_chart = (
 )
 st.altair_chart(cost_chart, width="stretch")
 
+# Break-even view: PTU is an architecture decision, not just a discount. Sweep
+# the request rate and show where the reserved PTU baseline overtakes PAYGO, so
+# the crossover (and where this workload sits relative to it) is visible.
+_be = breakeven_series(values)
+if _be["rows"]:
+    _rpm_label = "Peak requests per minute" if foundry_mode else "Average requests per minute"
+    be_records = []
+    for _r in _be["rows"]:
+        be_records.append({"RPM": _r["rpm"], "Lane": "PTU (reserved)", "Monthly $": _r["ptu_monthly"]})
+        be_records.append({"RPM": _r["rpm"], "Lane": "PAYGO", "Monthly $": _r["paygo_monthly"]})
+    be_df = pd.DataFrame(be_records)
+    be_lines = (
+        alt.Chart(be_df)
+        .mark_line()
+        .encode(
+            x=alt.X("RPM:Q", title=_rpm_label),
+            y=alt.Y("Monthly $:Q", title="Monthly cost (USD)"),
+            color=alt.Color("Lane:N", title=None),
+            tooltip=[alt.Tooltip("RPM:Q", format=",.0f"), "Lane", alt.Tooltip("Monthly $:Q", format=",.0f")],
+        )
+    )
+    be_layers = [be_lines]
+    be_layers.append(
+        alt.Chart(pd.DataFrame({"RPM": [_be["current_rpm"]]}))
+        .mark_rule(strokeDash=[4, 4], color="#6b6b75")
+        .encode(x="RPM:Q")
+    )
+    if _be["breakeven_rpm"]:
+        be_layers.append(
+            alt.Chart(pd.DataFrame({"RPM": [_be["breakeven_rpm"]]}))
+            .mark_rule(color="#0a6ed1")
+            .encode(x="RPM:Q")
+        )
+    st.altair_chart(alt.layer(*be_layers), width="stretch")
+    if _be["breakeven_rpm"]:
+        _be_side = "above" if _be["current_rpm"] >= _be["breakeven_rpm"] else "below"
+        st.caption(
+            f"Break-even ≈ **{_be['breakeven_rpm']:,.0f} RPM** (blue line): past it the reserved PTU baseline is cheaper than PAYGO. "
+            f"Your current load of {_be['current_rpm']:,.0f} RPM (grey dashed) sits **{_be_side}** break-even."
+        )
+    else:
+        st.caption(
+            f"Across the charted range PAYGO stays cheaper than a reserved PTU baseline — this workload is below the PTU break-even. "
+            f"Current load: {_be['current_rpm']:,.0f} RPM (grey dashed)."
+        )
+
 # One-click shareable report — a self-contained HTML file stakeholders can open
 # in any browser and "Save as PDF". Built from the same inputs/result as the page.
 _report_meta = {
@@ -417,14 +463,27 @@ _report_meta = {
     "foundry_mode": foundry_mode,
 }
 _report_html = build_report_html(values, calc, _report_meta)
-_report_name = f'ptu-sizing-{str(selected_model).replace(" ", "_")}-{deployment_type.replace(" ", "_")}.html'
-st.download_button(
-    "📄 Export shareable report (HTML / print to PDF)",
-    data=_report_html,
-    file_name=_report_name,
-    mime="text/html",
-    help="Downloads a self-contained report (inputs, recommendation, all four cost lanes, assumptions). Open it in a browser and use Print → Save as PDF to share with stakeholders.",
-)
+_safe_stem = f'ptu-sizing-{str(selected_model).replace(" ", "_")}-{deployment_type.replace(" ", "_")}'
+_report_name = f'{_safe_stem}.html'
+_export_html_col, _export_csv_col = st.columns(2)
+with _export_html_col:
+    st.download_button(
+        "📄 Export shareable report (HTML / print to PDF)",
+        data=_report_html,
+        file_name=_report_name,
+        mime="text/html",
+        width="stretch",
+        help="Downloads a self-contained report (inputs, recommendation, all four cost lanes, assumptions). Open it in a browser and use Print → Save as PDF to share with stakeholders.",
+    )
+with _export_csv_col:
+    st.download_button(
+        "📊 Export cost lanes (CSV for Excel)",
+        data=build_report_csv(values, calc, _report_meta),
+        file_name=f'{_safe_stem}.csv',
+        mime="text/csv",
+        width="stretch",
+        help="Downloads the four monthly cost lanes plus the inputs and assumptions as a flat Section/Item/Value CSV — drop it straight into Excel.",
+    )
 
 pricing_df = pd.DataFrame([
     {

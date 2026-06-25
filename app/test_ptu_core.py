@@ -582,3 +582,66 @@ def test_build_report_html_escapes_meta_to_prevent_injection():
     assert "x &amp; y" in html_out
 
 
+def test_breakeven_series_returns_sorted_rows_and_lanes():
+    be = ptu_core.breakeven_series(DEFAULTS, points=10)
+    assert len(be["rows"]) == 10
+    # RPM increases monotonically across the sweep.
+    rpms = [row["rpm"] for row in be["rows"]]
+    assert rpms == sorted(rpms)
+    assert all(r > 0 for r in rpms)
+    # Every row carries all four cost lanes.
+    for row in be["rows"]:
+        for key in ("paygo_monthly", "ptu_monthly", "blended_monthly", "priority_monthly"):
+            assert key in row and math.isfinite(row[key])
+    assert be["current_rpm"] == pytest.approx(DEFAULTS["avg_rpm"])
+
+
+def test_breakeven_series_finds_crossover_where_ptu_overtakes_paygo():
+    # A workload where the reserved PTU baseline is cheaper per token than PAYGO
+    # (lower hourly price) so a crossover exists: PAYGO wins in the low-volume
+    # floor region, PTU wins above break-even.
+    vals = {**DEFAULTS, "ptu_hourly_price": 0.5, "avg_rpm": 120}
+    be = ptu_core.breakeven_series(vals)
+    assert be["breakeven_rpm"] is not None
+    below = calculate({**vals, "avg_rpm": be["breakeven_rpm"] * 0.5})
+    above = calculate({**vals, "avg_rpm": be["breakeven_rpm"] * 2.0})
+    assert below["paygo_monthly"] < below["ptu_monthly"]
+    assert above["paygo_monthly"] > above["ptu_monthly"]
+
+
+def test_breakeven_series_returns_none_when_ptu_never_wins():
+    # With the default $1/hr PTU price these assumptions keep PAYGO cheaper at
+    # every volume, so there is no crossover to report.
+    be = ptu_core.breakeven_series(DEFAULTS)
+    assert be["breakeven_rpm"] is None
+
+
+def test_breakeven_series_respects_explicit_rpm_max():
+    be = ptu_core.breakeven_series(DEFAULTS, points=5, rpm_max=500)
+    assert be["rows"][-1]["rpm"] == pytest.approx(500)
+
+
+def test_build_report_csv_has_header_and_cost_lanes():
+    r = calculate(DEFAULTS)
+    csv_out = ptu_core.build_report_csv(
+        DEFAULTS, r, {"model": "gpt-4.1", "deployment_type": "Global", "region": "eastus2"}
+    )
+    lines = csv_out.splitlines()
+    assert lines[0] == "Section,Item,Value"
+    # Every cost lane and the recommendation are present.
+    for needle in ("PTU (1-month reserved)", "PAYGO", "PTU + spillover", "Priority processing", "Recommended PTUs"):
+        assert needle in csv_out
+    # Context carried through.
+    assert "gpt-4.1" in csv_out and "eastus2" in csv_out
+    # Parses cleanly as CSV with three columns per row.
+    import csv as _csv
+    rows = list(_csv.reader(csv_out.splitlines()))
+    assert all(len(row) == 3 for row in rows)
+
+
+def test_build_report_csv_marks_priority_not_applicable_when_unsupported():
+    r = calculate({**DEFAULTS, "priority_supported": False})
+    csv_out = ptu_core.build_report_csv(DEFAULTS, r, {"model": "gpt-4o"})
+    assert "Priority processing,n/a" in csv_out
+
+

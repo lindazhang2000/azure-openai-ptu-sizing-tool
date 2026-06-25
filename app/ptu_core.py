@@ -7,8 +7,10 @@ assumptions, minimum PTU commitments, and pricing are subject to change. Always
 verify against current Azure documentation before making customer-specific decisions.
 """
 
+import csv
 import datetime as _dt
 import html
+import io
 import json
 import math
 import os
@@ -783,3 +785,132 @@ def build_report_html(values, calc, meta=None):
 </div>
 </body>
 </html>"""
+
+def breakeven_series(values, points=25, rpm_max=None):
+    """Sweep average/peak RPM and recompute the monthly cost lanes at each step.
+
+    PTU is fundamentally an architecture decision: below some load PAYGO is
+    cheaper, above it the reserved PTU baseline wins. This returns the data to
+    draw that crossover.
+
+    Returns a dict:
+      - ``rows``: list of ``{rpm, paygo_monthly, ptu_monthly, blended_monthly,
+        priority_monthly}`` sampled across the RPM range.
+      - ``breakeven_rpm``: the RPM at which the PTU (1-month reserved) lane first
+        becomes cheaper than PAYGO, or ``None`` if it never does within range.
+      - ``current_rpm``: the RPM from ``values`` (so the UI can mark "you are here").
+      - ``priority_supported``: whether the priority lane applies.
+
+    Cost is recomputed via :func:`calculate`, so the PTU lane keeps its stepwise
+    rounding to the scale increment.
+    """
+    current_rpm = max(float(values.get("avg_rpm", 0.0)), 0.0)
+
+    def costs(rpm):
+        v = dict(values)
+        v["avg_rpm"] = rpm
+        return calculate(v)
+
+    # Find break-even (first RPM where reserved PTU <= PAYGO) via a fine scan.
+    cap = max(current_rpm * 8.0, 1.0)
+    scan_steps = 240
+    breakeven_rpm = None
+    for i in range(1, scan_steps + 1):
+        rpm = cap * i / scan_steps
+        c = costs(rpm)
+        if c["paygo_monthly"] >= c["ptu_monthly"]:
+            breakeven_rpm = rpm
+            break
+
+    # Display range: always show the crossover and the current operating point.
+    anchor = max(current_rpm, breakeven_rpm or 0.0)
+    rpm_top = float(rpm_max) if rpm_max else max(anchor * 1.6, 1.0)
+
+    priority_supported = bool(costs(rpm_top)["priority_supported"])
+    rows = []
+    for i in range(1, points + 1):
+        rpm = rpm_top * i / points
+        c = costs(rpm)
+        rows.append({
+            "rpm": rpm,
+            "paygo_monthly": c["paygo_monthly"],
+            "ptu_monthly": c["ptu_monthly"],
+            "blended_monthly": c["blended_monthly"],
+            "priority_monthly": c["priority_monthly"],
+        })
+
+    return {
+        "rows": rows,
+        "breakeven_rpm": breakeven_rpm,
+        "current_rpm": current_rpm,
+        "priority_supported": priority_supported,
+    }
+
+
+def build_report_csv(values, calc, meta=None):
+    """Render the sizing result as a flat ``Section,Item,Value`` CSV string.
+
+    Captures the run context, PTU recommendation, the four monthly cost lanes,
+    PTU pricing tiers, workload inputs, and pricing assumptions — ready to drop
+    into Excel. ``meta`` carries optional run context (``model``,
+    ``deployment_type``, ``region``, ``foundry_mode``).
+    """
+    meta = meta or {}
+    foundry_mode = bool(meta.get("foundry_mode"))
+
+    rows = []
+
+    def add(section, item, value):
+        rows.append((section, item, value))
+
+    add("Context", "Model", meta.get("model") or "Custom")
+    add("Context", "Deployment type", meta.get("deployment_type") or "-")
+    add("Context", "Region", meta.get("region") or "-")
+    add("Context", "Sizing mode",
+        "Foundry (peak, no buffer)" if foundry_mode else "Field baseline + spillover")
+    add("Context", "Pricing confirmed as of", PRICING_CONFIRMED_AS_OF)
+
+    add("Recommendation", "Recommended PTUs", f'{calc["recommended_ptu"]:.0f}')
+    add("Recommendation", "Peak reference PTUs", f'{calc["peak_reference_ptu"]:.0f}')
+    add("Recommendation", "Burst ratio (P95/avg)", f'{calc["burst_ratio"]:.2f}')
+    add("Recommendation", "Baseline TPM", f'{calc["baseline_tpm"]:.0f}')
+    add("Recommendation", "P95 TPM", f'{calc["p95_tpm"]:.0f}')
+    add("Recommendation", "Architecture", (calc.get("architecture") or {}).get("label", ""))
+
+    add("Cost (monthly USD)", "PTU (1-month reserved)", f'{calc["ptu_monthly"]:.2f}')
+    add("Cost (monthly USD)", "PAYGO", f'{calc["paygo_monthly"]:.2f}')
+    add("Cost (monthly USD)", "PTU + spillover", f'{calc["blended_monthly"]:.2f}')
+    add("Cost (monthly USD)", "Priority processing",
+        f'{calc["priority_monthly"]:.2f}' if calc.get("priority_supported") else "n/a")
+    add("Cost (monthly USD)", "Spillover fraction", f'{calc["spill_fraction"] * 100:.1f}%')
+    add("Cost (monthly USD)",
+        "PTU saves vs PAYGO" if calc["savings_delta"] >= 0 else "PAYGO saves vs PTU",
+        f'{abs(calc["savings_delta"]):.2f}')
+
+    for tier in calc.get("pricing_tiers", []):
+        add("PTU pricing tiers", tier["term"], f'{tier["total_monthly"]:.2f}')
+
+    add("Workload input", "Average RPM" if not foundry_mode else "Peak RPM",
+        f'{values.get("avg_rpm", 0):.0f}')
+    add("Workload input", "Avg input tokens/request", f'{values.get("avg_input_tokens", 0):.0f}')
+    add("Workload input", "Avg output tokens/request", f'{values.get("avg_output_tokens", 0):.0f}')
+    add("Workload input", "Prompt cache rate", f'{values.get("cache_rate", 0) * 100:.0f}%')
+    add("Workload input", "P95 load multiplier", f'{values.get("p95_multiplier", 0):.2f}')
+    add("Workload input", "Baseline load factor", f'{values.get("baseline_load_factor", 0):.2f}')
+    add("Workload input", "Safety buffer", f'{values.get("safety_buffer", 0) * 100:.0f}%')
+    add("Workload input", "Peak minutes fraction", f'{values.get("peak_minutes_fraction", 0) * 100:.0f}%')
+
+    add("Assumption", "PTU hourly price (USD)", f'{values.get("ptu_hourly_price", 0):.2f}')
+    add("Assumption", "Monthly reservation discount", f'{values.get("reservation_discount_monthly", 0) * 100:.0f}%')
+    add("Assumption", "Yearly reservation discount", f'{values.get("reservation_discount_yearly", 0) * 100:.0f}%')
+    add("Assumption", "PAYGO input /1M", f'{values.get("paygo_input_per_1m", 0):.2f}')
+    add("Assumption", "PAYGO cached input /1M", f'{values.get("paygo_cached_per_1m", 0):.2f}')
+    add("Assumption", "PAYGO output /1M", f'{values.get("paygo_output_per_1m", 0):.2f}')
+    add("Assumption", "Model TPM per PTU", f'{values.get("model_tpm_per_ptu", 0):.0f}')
+    add("Assumption", "Output weighting", f'{values.get("output_weight", 0):.1f}')
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["Section", "Item", "Value"])
+    writer.writerows(rows)
+    return buf.getvalue()
