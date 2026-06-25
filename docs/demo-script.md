@@ -18,12 +18,23 @@ Hit record and run it:
 ```powershell
 pwsh scripts/demo_play.ps1            # presenter-driven: press Enter to advance each step
 pwsh scripts/demo_play.ps1 -Auto      # hands-free with timed pauses (-PauseSeconds N)
+pwsh scripts/demo_play.ps1 -Short     # ~60-second teaser (peak + bridge punchline only)
 pwsh scripts/demo_play.ps1 -LaunchApp # also start the Streamlit app at Act 1
 ```
 
-It covers Acts 1–3 below (and an Act 2.5 that seeds the sizing inputs from usage via
-[scripts/usage_to_sizing.py](../scripts/usage_to_sizing.py)). The rest of this doc is
-the full narration if you'd rather drive it manually.
+On macOS/Linux use the bash twin, [scripts/demo_play.sh](../scripts/demo_play.sh):
+
+```bash
+scripts/demo_play.sh                  # presenter-driven
+scripts/demo_play.sh --auto --pause 8 # hands-free
+scripts/demo_play.sh --short --auto   # ~60-second teaser
+```
+
+Both cover Acts 1–3 below (and an Act 2.5 that seeds the sizing inputs from usage via
+[scripts/usage_to_sizing.py](../scripts/usage_to_sizing.py)); `-Short`/`--short` drops
+Act 1 and the hourly pass for a quick teaser. The rest of this doc is the full narration
+if you'd rather drive it manually.
+
 
 
 ---

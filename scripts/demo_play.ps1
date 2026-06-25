@@ -25,6 +25,10 @@
 .PARAMETER LaunchApp
     Start the Streamlit app in a separate process at the app act.
 
+.PARAMETER Short
+    ~60-second teaser: skip the app act and the hourly pass; run just the fine-grained
+    peak (with PTU hint) and the usage->sizing bridge punchline.
+
 .EXAMPLE
     pwsh scripts/demo_play.ps1
     Presenter-driven run (press Enter to advance each step).
@@ -32,13 +36,18 @@
 .EXAMPLE
     pwsh scripts/demo_play.ps1 -Auto -PauseSeconds 8
     Hands-free run with 8-second pauses.
+
+.EXAMPLE
+    pwsh scripts/demo_play.ps1 -Short -Auto
+    Hands-free 60-second teaser.
 #>
 [CmdletBinding()]
 param(
     [switch]$Auto,
     [int]$PauseSeconds = 7,
     [int]$Days = 14,
-    [switch]$LaunchApp
+    [switch]$LaunchApp,
+    [switch]$Short
 )
 
 $ErrorActionPreference = 'Stop'
@@ -87,7 +96,14 @@ Push-Location $Root
 try {
     try { Clear-Host } catch { }
     Write-Banner 'Azure OpenAI PTU Sizing Tool - demo'
-    Write-Narration @"
+    if ($Short) {
+        Write-Narration @"
+Sizing Azure OpenAI capacity is a guessing game -- too few PTUs and you throttle, too
+many and you pay for idle. This tool reads your REAL token usage, finds the peak you
+must size for, and turns it straight into a PTU recommendation. 60-second tour:
+"@
+    } else {
+        Write-Narration @"
 Picking Azure OpenAI capacity is a guessing game: too few PTUs and you get throttled,
 too many and you pay for idle capacity. This tool turns a few workload numbers into an
 architecture recommendation -- and it can read your REAL token usage to find the peak
@@ -96,9 +112,11 @@ you actually need to size for.
 This walkthrough uses built-in synthetic data, so nothing live is shown and every
 number is reproducible.
 "@
+    }
     Wait-Step
 
-    # ---- Act 1: the app -----------------------------------------------------
+    # ---- Act 1: the app (full only) ----------------------------------------
+    if (-not $Short) {
     Write-Banner 'Act 1 - Interactive sizing in the Streamlit app'
     Write-Narration @"
 First, the app. Give it a workload and it answers: PTU or PAYGO, and how many PTUs.
@@ -125,9 +143,20 @@ minimum and a safety buffer baked in.
         Write-Narration 'Run in another terminal:  python -m streamlit run app/ptu_streamlit_app.py'
     }
     Wait-Step
+    }
 
     # ---- Act 2: real-shaped usage ------------------------------------------
     Write-Banner 'Act 2 - Real-shaped usage from Azure Monitor (token_usage.py)'
+    if ($Short) {
+        Write-Narration @"
+This reads actual token usage from Azure Monitor -- per deployment and per model -- and
+finds the busiest window. Demo data here, but the shape is what you'd see live. Note the
+per-model CONCURRENT peak (gpt-4.1 spans two deployments), the fine-grained tokens/min,
+and the ~N PTU hint per peak.
+"@
+        Invoke-Demo @('scripts/token_usage.py','--demo','--days',"$Days",'--interval','PT5M','--ptu-hint')
+        Wait-Step
+    } else {
     Write-Narration @"
 Sizing is only as good as the peak you feed it. This script reads actual token usage
 from Azure Monitor -- per deployment and per model -- and finds the busiest window.
@@ -146,6 +175,7 @@ under-provision for real bursts.
 "@
     Invoke-Demo @('scripts/token_usage.py','--demo','--days',"$Days",'--interval','PT5M')
     Wait-Step
+    }
 
     # ---- Act 2.5: usage -> sizing inputs -----------------------------------
     Write-Banner 'Act 2.5 - Seed the sizing inputs from real usage (optional bridge)'
@@ -160,6 +190,13 @@ uses. A real-traffic head start on the sizing decision.
 
     # ---- Act 3: wrap --------------------------------------------------------
     Write-Banner 'Act 3 - Wrap'
+    if ($Short) {
+        Write-Narration @"
+Real usage in, a PTU recommendation out. Open source and directional -- validate against
+Microsoft's official PTU calculator before committing capacity.
+  Repo: github.com/lindazhang2000/azure-openai-ptu-sizing-tool
+"@
+    } else {
     Write-Narration @"
 So: the app frames PTU-vs-PAYGO and the architecture pattern, and the usage scripts
 ground it in the peak you actually serve. All open source -- formulas, presets, and
@@ -170,6 +207,7 @@ assumptions are editable.
 Directional guidance only -- always validate against Microsoft's official PTU
 calculator and current pricing before committing capacity.
 "@
+    }
     Write-Host ''
     Write-Host '  Demo complete.' -ForegroundColor Green
     Write-Host ''
