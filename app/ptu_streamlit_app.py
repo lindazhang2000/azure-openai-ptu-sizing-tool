@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 import ptu_core
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, spillover_supported
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, available_deployment_types, available_regions, build_report_html, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, spillover_supported
 
 st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
 
@@ -338,6 +338,24 @@ cost_chart = (
     )
 )
 st.altair_chart(cost_chart, width="stretch")
+
+# One-click shareable report — a self-contained HTML file stakeholders can open
+# in any browser and "Save as PDF". Built from the same inputs/result as the page.
+_report_meta = {
+    "model": selected_model,
+    "deployment_type": deployment_type,
+    "region": region,
+    "foundry_mode": foundry_mode,
+}
+_report_html = build_report_html(values, calc, _report_meta)
+_report_name = f'ptu-sizing-{str(selected_model).replace(" ", "_")}-{deployment_type.replace(" ", "_")}.html'
+st.download_button(
+    "📄 Export shareable report (HTML / print to PDF)",
+    data=_report_html,
+    file_name=_report_name,
+    mime="text/html",
+    help="Downloads a self-contained report (inputs, recommendation, all four cost lanes, assumptions). Open it in a browser and use Print → Save as PDF to share with stakeholders.",
+)
 
 pricing_df = pd.DataFrame([
     {

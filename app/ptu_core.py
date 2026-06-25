@@ -7,6 +7,8 @@ assumptions, minimum PTU commitments, and pricing are subject to change. Always
 verify against current Azure documentation before making customer-specific decisions.
 """
 
+import datetime as _dt
+import html
 import json
 import math
 import os
@@ -561,3 +563,223 @@ def calculate(values):
         "spillover_supported": spillover_ok,
         "reservation_note": "Reservation should be treated as a billing optimization after workload validation, not as the first step and not as capacity by itself."
     }
+
+
+def build_report_html(values, calc, meta=None):
+    """Render a self-contained, printable HTML sizing report for stakeholders.
+
+    Returns a single HTML string (inline CSS, no external assets) summarising the
+    workload inputs, PTU recommendation, architecture call, the four monthly cost
+    lanes, and the pricing assumptions — ready to download and share, or to open
+    and "Save as PDF" from the browser. ``meta`` carries the run context
+    (``model``, ``deployment_type``, ``region``, ``foundry_mode``, ``title``);
+    all keys are optional.
+    """
+    meta = meta or {}
+
+    def esc(text):
+        return html.escape(str(text))
+
+    def money(amount):
+        return f"${amount:,.0f}"
+
+    def num(value, decimals=0):
+        return f"{value:,.{decimals}f}"
+
+    def pct(fraction, decimals=0):
+        return f"{fraction * 100:,.{decimals}f}%"
+
+    title = meta.get("title") or "Azure OpenAI PTU Sizing Report"
+    model = meta.get("model") or "Custom"
+    deployment_type = meta.get("deployment_type") or "-"
+    region = meta.get("region") or "-"
+    foundry_mode = bool(meta.get("foundry_mode"))
+    generated = meta.get("generated_utc") or _dt.datetime.now(
+        _dt.timezone.utc
+    ).strftime("%Y-%m-%d %H:%M UTC")
+
+    arch = calc.get("architecture") or {}
+
+    # Context chips shown under the title.
+    chips = [
+        ("Model", model),
+        ("Deployment", deployment_type),
+        ("Region", region),
+        ("Sizing mode", "Foundry (peak, no buffer)" if foundry_mode else "Field baseline + spillover"),
+    ]
+    chip_html = "".join(
+        f'<span class="chip"><b>{esc(label)}:</b> {esc(value)}</span>' for label, value in chips
+    )
+
+    # Headline recommendation cards.
+    cards = [
+        ("Recommended PTUs", num(calc["recommended_ptu"])),
+        ("Peak reference PTUs", num(calc["peak_reference_ptu"])),
+        ("Burst ratio (P95 / avg)", f'{calc["burst_ratio"]:,.2f}x'),
+        ("Baseline TPM", num(calc["baseline_tpm"])),
+    ]
+    card_html = "".join(
+        f'<div class="card"><div class="card-val">{esc(v)}</div>'
+        f'<div class="card-lbl">{esc(l)}</div></div>'
+        for l, v in cards
+    )
+
+    # Four monthly cost lanes (priority shows n/a when it does not apply).
+    if calc.get("priority_supported"):
+        prio_premium = (
+            (calc["priority_monthly"] / calc["paygo_monthly"] - 1) * 100
+            if calc["paygo_monthly"] else 0.0
+        )
+        prio_src = (
+            "confirmed per-model rates"
+            if calc.get("priority_rate_source") == "confirmed"
+            else f'~{calc["priority_multiplier"]:.2f}x PAYGO fallback'
+        )
+        prio_cell = money(calc["priority_monthly"])
+        prio_note = f'+{prio_premium:,.0f}% vs PAYGO &middot; {esc(prio_src)}'
+    else:
+        prio_cell = "n/a"
+        prio_note = "Needs a supported model (gpt-5.x / gpt-4.1 family) on Global or Data Zone (US) Standard."
+
+    cost_rows = [
+        ("PTU (1-month reserved)", money(calc["ptu_monthly"]),
+         f'Hourly list {money(calc["ptu_hourly_monthly"])}/mo before reservation discount.'),
+        ("PAYGO (Standard)", money(calc["paygo_monthly"]), "All demand billed per token."),
+        ("PTU + spillover", money(calc["blended_monthly"]),
+         f'~{pct(calc["spill_fraction"], 1)} of demand spills to Standard.'),
+        ("Priority processing", prio_cell, prio_note),
+    ]
+    cost_html = "".join(
+        f"<tr><td>{esc(lane)}</td><td class='r'>{cell}</td><td class='muted'>{note}</td></tr>"
+        for lane, cell, note in cost_rows
+    )
+
+    savings_label = "PTU saves vs PAYGO" if calc["savings_delta"] >= 0 else "PAYGO saves vs PTU"
+
+    # PTU reservation pricing tiers.
+    tier_html = "".join(
+        f"<tr><td>{esc(t['term'])}</td><td class='r'>${t['per_ptu_monthly']:,.0f}</td>"
+        f"<td class='r'>{money(t['total_monthly'])}</td>"
+        f"<td class='r'>{'-' if t['savings'] == 0 else pct(t['savings'])}</td></tr>"
+        for t in calc.get("pricing_tiers", [])
+    )
+
+    # Workload inputs.
+    input_rows = [
+        ("Average RPM" if not foundry_mode else "Peak RPM", num(values.get("avg_rpm", 0))),
+        ("Avg input tokens / request", num(values.get("avg_input_tokens", 0))),
+        ("Avg output tokens / request", num(values.get("avg_output_tokens", 0))),
+        ("Prompt cache rate", pct(values.get("cache_rate", 0))),
+        ("P95 load multiplier", f'{values.get("p95_multiplier", 0):,.2f}x'),
+        ("Baseline load factor", f'{values.get("baseline_load_factor", 0):,.2f}'),
+        ("Safety buffer", pct(values.get("safety_buffer", 0))),
+        ("Peak minutes fraction", pct(values.get("peak_minutes_fraction", 0))),
+    ]
+    input_html = "".join(
+        f"<tr><td>{esc(l)}</td><td class='r'>{esc(v)}</td></tr>" for l, v in input_rows
+    )
+
+    # Cost & throughput assumptions.
+    assume_rows = [
+        ("PTU hourly price (USD)", f'${values.get("ptu_hourly_price", 0):,.2f}'),
+        ("Monthly reservation discount", pct(values.get("reservation_discount_monthly", 0))),
+        ("Yearly reservation discount", pct(values.get("reservation_discount_yearly", 0))),
+        ("PAYGO input / 1M tokens", f'${values.get("paygo_input_per_1m", 0):,.2f}'),
+        ("PAYGO cached input / 1M", f'${values.get("paygo_cached_per_1m", 0):,.2f}'),
+        ("PAYGO output / 1M tokens", f'${values.get("paygo_output_per_1m", 0):,.2f}'),
+        ("Priority input / 1M tokens", f'${values.get("priority_input_per_1m", 0):,.2f}'),
+        ("Priority output / 1M tokens", f'${values.get("priority_output_per_1m", 0):,.2f}'),
+        ("Model TPM per PTU", num(values.get("model_tpm_per_ptu", 0))),
+        ("Output weighting", f'{values.get("output_weight", 0):,.1f}'),
+    ]
+    assume_html = "".join(
+        f"<tr><td>{esc(l)}</td><td class='r'>{esc(v)}</td></tr>" for l, v in assume_rows
+    )
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc(title)}</title>
+<style>
+  :root {{ --ink:#1b1b1f; --muted:#6b6b75; --line:#e3e3ea; --accent:#0a6ed1; --bg:#f7f8fa; }}
+  * {{ box-sizing:border-box; }}
+  body {{ font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--ink);
+         margin:0; background:var(--bg); }}
+  .wrap {{ max-width:880px; margin:0 auto; padding:32px 28px 56px; background:#fff; }}
+  h1 {{ font-size:22px; margin:0 0 4px; }}
+  h2 {{ font-size:15px; margin:28px 0 8px; padding-bottom:6px; border-bottom:2px solid var(--accent);
+        text-transform:uppercase; letter-spacing:.04em; color:var(--accent); }}
+  .sub {{ color:var(--muted); font-size:13px; margin:0 0 14px; }}
+  .chips {{ margin:10px 0 4px; }}
+  .chip {{ display:inline-block; background:var(--bg); border:1px solid var(--line); border-radius:14px;
+           padding:3px 11px; font-size:12px; margin:0 6px 6px 0; }}
+  .cards {{ display:flex; flex-wrap:wrap; gap:12px; margin:8px 0 4px; }}
+  .card {{ flex:1 1 150px; border:1px solid var(--line); border-radius:10px; padding:14px 16px; background:#fff; }}
+  .card-val {{ font-size:24px; font-weight:700; color:var(--accent); }}
+  .card-lbl {{ font-size:12px; color:var(--muted); margin-top:2px; }}
+  table {{ width:100%; border-collapse:collapse; font-size:13px; margin:4px 0 6px; }}
+  th,td {{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }}
+  th {{ background:var(--bg); font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }}
+  td.r,th.r {{ text-align:right; white-space:nowrap; }}
+  td.muted,.muted {{ color:var(--muted); font-size:12px; }}
+  .arch {{ border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:8px;
+           padding:12px 16px; background:var(--bg); margin:6px 0; }}
+  .arch b {{ font-size:14px; }}
+  .foot {{ margin-top:26px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; }}
+  .foot a {{ color:var(--accent); }}
+  .printbtn {{ position:fixed; top:16px; right:16px; background:var(--accent); color:#fff; border:0;
+              border-radius:8px; padding:10px 16px; font-size:13px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.15); }}
+  @media print {{
+    body {{ background:#fff; }}
+    .wrap {{ max-width:none; padding:0; }}
+    .printbtn {{ display:none; }}
+    h2 {{ break-after:avoid; }}
+    table,.cards,.arch {{ break-inside:avoid; }}
+  }}
+</style>
+</head>
+<body>
+<button class="printbtn" onclick="window.print()">Print / Save as PDF</button>
+<div class="wrap">
+  <h1>{esc(title)}</h1>
+  <p class="sub">Generated {esc(generated)} &middot; illustrative, directional guidance only — not an official Azure PTU calculator.</p>
+  <div class="chips">{chip_html}</div>
+
+  <h2>Recommendation</h2>
+  <div class="cards">{card_html}</div>
+  <div class="arch"><b>{esc(arch.get('badge', ''))} {esc(arch.get('label', ''))}</b><br>
+    {esc(arch.get('summary', ''))}<br>
+    <span class="muted">{esc(arch.get('reason', ''))}</span></div>
+
+  <h2>Monthly cost comparison</h2>
+  <table>
+    <tr><th>Cost lane</th><th class="r">Monthly</th><th>Notes</th></tr>
+    {cost_html}
+  </table>
+  <p class="muted"><b>{esc(savings_label)}:</b> {money(abs(calc["savings_delta"]))} / month.
+     Priority processing requires model version 2025-12-01+ and Global or Data Zone (US) Standard;
+     Data Zone priority covers US data zones only.</p>
+
+  <h2>PTU pricing tiers (for {num(calc["recommended_ptu"])} PTUs)</h2>
+  <table>
+    <tr><th>Term</th><th class="r">Per PTU / mo</th><th class="r">Total / mo</th><th class="r">Savings</th></tr>
+    {tier_html}
+  </table>
+
+  <h2>Workload inputs</h2>
+  <table>{input_html}</table>
+
+  <h2>Cost &amp; throughput assumptions</h2>
+  <table>{assume_html}</table>
+
+  <p class="foot">
+    Pricing confirmed against the Azure OpenAI pricing page as of {esc(PRICING_CONFIRMED_AS_OF)} —
+    <a href="{esc(PRICING_SOURCE_URL)}">{esc(PRICING_SOURCE_URL)}</a>.
+    Throughput assumptions, minimum PTU commitments, and pricing are subject to change.
+    Always verify against current Azure documentation before making customer-specific decisions.
+  </p>
+</div>
+</body>
+</html>"""

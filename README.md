@@ -181,7 +181,7 @@ flowchart TD
 | Path | Contents |
 | --- | --- |
 | [app/](app) | The PTU sizing tool. `ptu_core.py` (sizing engine), `ptu_streamlit_app.py` (Streamlit UI), `PTU_Sizing_Notebook.ipynb` (notebook), `test_ptu_core.py` (tests), the bundled `region_data.json` snapshot, plus the app `README.md` and `requirements.txt`. |
-| [scripts/](scripts) | Operations and demo tooling. `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` + `region-refresh-job.yaml` (regenerate region availability via the Azure Models API / daily Container Apps Job), `token_usage.py` (per-deployment / per-model token usage across a subscription, with a `--demo` synthetic mode), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), `demo_play.ps1` / `demo_play.sh` (self-running narrated demo playback; add `-Short`/`--short` for a teaser), and `test_token_usage.py` / `test_usage_to_sizing.py` (tests). |
+| [scripts/](scripts) | Operations and demo tooling. `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` + `region-refresh-job.yaml` (regenerate region availability via the Azure Models API / daily Container Apps Job), `token_usage.py` (per-deployment / per-model token usage across a subscription, with a `--demo` synthetic mode), `token_usage_kql.py` (the same report shape from a Log Analytics workspace via KQL), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), `demo_play.ps1` / `demo_play.sh` (self-running narrated demo playback; add `-Short`/`--short` for a teaser), and `test_token_usage.py` / `test_usage_to_sizing.py` (tests). |
 | [docs/](docs) | Supporting assets: `app-screenshot.png`, `PTU_decision_triangle.png`, `demo-script.md` (timed demo narration / recording guide), and the architecture-first capacity-planning whitepaper behind this tool (`Architecture_Driven_Capacity_Planning_Whitepaper.html` and `.docx`). |
 | [linkedin/](linkedin) | `ptu_post.md` — a ready-to-share LinkedIn post about the tool. |
 | Root | `README.md`, `requirements.txt` (deploy/runtime deps for App Service; the `app/` copy adds `pytest` for local dev + tests), `pyproject.toml` (packaging + pytest config), and `LICENSE`. |
@@ -324,6 +324,46 @@ used to express that as "requests × per-request tokens" and does **not** change
 recommended PTU. Treat the output as a directional starting point and validate it in
 the app / official Azure PTU calculator before committing capacity.
 
+### From Log Analytics (KQL) instead of live Azure Monitor
+
+If your token telemetry already flows into a **Log Analytics workspace** — point a
+Cognitive Services / Azure OpenAI account's **diagnostic setting** at a workspace with
+*AllMetrics* enabled and the same counters land in the `AzureMetrics` table — use
+[scripts/token_usage_kql.py](scripts/token_usage_kql.py). It runs a KQL query
+(`az monitor log-analytics query`), totals the token metrics per resource, finds the
+busiest bucket for the peak, and writes the **same JSON shape** as `token_usage.py`, so
+it feeds straight into the sizing bridge above. It needs `az login` and **Log Analytics
+Reader** on the workspace.
+
+```bash
+python scripts/token_usage_kql.py -w <workspace-guid>                 # last 30 days, hourly
+python scripts/token_usage_kql.py -w <guid> --days 7 --interval PT5M  # finer peak resolution
+python scripts/token_usage_kql.py -w <guid> --model gpt-4.1 --json usage.json
+python scripts/usage_to_sizing.py --from-json usage.json --calculate  # → sizing inputs
+python scripts/token_usage_kql.py --print-query                       # just print the KQL recipe
+python scripts/token_usage_kql.py --demo --ptu-hint                   # synthetic, no Azure
+```
+
+The workspace id is the workspace **customer/GUID** (`az monitor log-analytics
+workspace show -g <rg> -n <ws> --query customerId -o tsv`). Run `--print-query` to copy
+the KQL into the portal — the recipe is:
+
+```kql
+AzureMetrics
+| where TimeGenerated >= datetime(<start>) and TimeGenerated < datetime(<end>)
+| where ResourceProvider == "MICROSOFT.COGNITIVESERVICES"
+| where MetricName in ("ProcessedPromptTokens", "GeneratedTokens", "TokenTransaction")
+| summarize Total = sum(Total) by ResourceId, Resource, MetricName, Bucket = bin(TimeGenerated, 1h)
+| project ResourceId, Resource, MetricName, Total, Bucket
+| order by Bucket asc
+```
+
+> **Per-account, not per-deployment.** Platform metrics in `AzureMetrics` are
+> pre-aggregated and do **not** preserve the `ModelDeploymentName` dimension, so usage
+> is reported per *account* (one pseudo-deployment labelled with `--model` so a sizing
+> preset matches). For a true per-deployment split, use `token_usage.py` (live Azure
+> Monitor), which queries the deployment dimension directly.
+
 ## What the tool does
 
 Given workload inputs (average RPM, input/output tokens per request, P95 multiplier, prompt cache rate, etc.) and cost assumptions, the tool:
@@ -331,6 +371,7 @@ Given workload inputs (average RPM, input/output tokens per request, P95 multipl
 1. Estimates a steady-state **baseline PTU** recommendation and a **peak reference PTU** figure.
 2. Compares four monthly cost lanes side by side: **PTU** (reserved), **PAYGO** (Standard), **PTU + spillover** (blended), and **Priority processing** (Standard's low-latency tier). Priority is priced from confirmed per-model rates and only shows a figure when the model and deployment type support it (see [Priority processing](#priority-processing-the-fourth-cost-lane)).
 3. Suggests an architecture pattern based on burstiness (PTU-first, PTU + Standard spillover, or PAYGO / smaller PTU pilot). Automatic spillover is only offered on Global and Data Zone deployments, so a Regional deployment with a bursty profile is flagged for *manual overflow* instead.
+4. Produces a one-click **shareable report** — the **Export shareable report** button downloads a self-contained HTML file (inputs, recommendation, all four cost lanes, pricing tiers, and assumptions) that stakeholders can open in any browser and **Print → Save as PDF**.
 
 The guiding principle: size PTU for the steady-state baseline, use Standard/PAYGO for spillover, and treat reservation as a billing optimization **after** workload validation — not as the first step.
 

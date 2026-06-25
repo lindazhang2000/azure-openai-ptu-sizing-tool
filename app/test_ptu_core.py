@@ -538,3 +538,47 @@ def test_suggest_ptu_for_throughput_uses_defaults_and_is_safe():
     assert math.isfinite(big) and big > 0
 
 
+def test_build_report_html_includes_recommendation_and_cost_lanes():
+    vals = {
+        **DEFAULTS,
+        **{k: MODEL_PRESETS["gpt-4.1"][k] for k in MODEL_PRESETS["gpt-4.1"] if k in DEFAULTS},
+        "priority_input_per_1m": 3.5,
+        "priority_cached_per_1m": 0.88,
+        "priority_output_per_1m": 14.0,
+        "priority_supported": True,
+    }
+    r = calculate(vals)
+    html_out = ptu_core.build_report_html(
+        vals, r, {"model": "gpt-4.1", "deployment_type": "Global", "region": "eastus2"}
+    )
+    assert html_out.startswith("<!doctype html>")
+    assert html_out.rstrip().endswith("</html>")
+    # Context + every cost lane is present.
+    assert "gpt-4.1" in html_out and "eastus2" in html_out
+    for lane in ("PTU (1-month reserved)", "PAYGO", "PTU + spillover", "Priority processing"):
+        assert lane in html_out
+    # Headline number renders.
+    assert f'{r["recommended_ptu"]:,.0f}' in html_out
+    # Disclaimer / pricing provenance carried through.
+    assert ptu_core.PRICING_CONFIRMED_AS_OF in html_out
+    assert "not an official Azure PTU calculator" in html_out
+
+
+def test_build_report_html_marks_priority_not_applicable_when_unsupported():
+    r = calculate({**DEFAULTS, "priority_supported": False})
+    html_out = ptu_core.build_report_html(DEFAULTS, r, {"model": "gpt-4o"})
+    # Priority lane shows n/a rather than a dollar figure.
+    assert "Priority processing" in html_out
+    assert "n/a" in html_out
+
+
+def test_build_report_html_escapes_meta_to_prevent_injection():
+    r = calculate(DEFAULTS)
+    html_out = ptu_core.build_report_html(
+        DEFAULTS, r, {"model": "<script>alert(1)</script>", "region": "x & y"}
+    )
+    assert "<script>alert(1)</script>" not in html_out
+    assert "&lt;script&gt;" in html_out
+    assert "x &amp; y" in html_out
+
+
