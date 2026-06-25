@@ -9,6 +9,23 @@ across takes and nothing live is shown on camera.
 > Times are rough. Narration is in *italics*; commands are in code blocks. Run each
 > command once, off-camera if you like, to warm caches before recording.
 
+## Hands-free option: `demo_play.ps1`
+
+Prefer not to type live? [scripts/demo_play.ps1](../scripts/demo_play.ps1) plays the
+whole thing — on-screen narration plus the paced CLI commands (all `--demo`, no Azure).
+Hit record and run it:
+
+```powershell
+pwsh scripts/demo_play.ps1            # presenter-driven: press Enter to advance each step
+pwsh scripts/demo_play.ps1 -Auto      # hands-free with timed pauses (-PauseSeconds N)
+pwsh scripts/demo_play.ps1 -LaunchApp # also start the Streamlit app at Act 1
+```
+
+It covers Acts 1–3 below (and an Act 2.5 that seeds the sizing inputs from usage via
+[scripts/usage_to_sizing.py](../scripts/usage_to_sizing.py)). The rest of this doc is
+the full narration if you'd rather drive it manually.
+
+
 ---
 
 ## Before you record (off-camera setup)
