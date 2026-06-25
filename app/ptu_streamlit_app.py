@@ -337,7 +337,7 @@ cost_chart = (
         tooltip=["Lane", alt.Tooltip("Monthly $:Q", format=",.0f")],
     )
 )
-st.altair_chart(cost_chart, use_container_width=True)
+st.altair_chart(cost_chart, width="stretch")
 
 pricing_df = pd.DataFrame([
     {
@@ -349,7 +349,7 @@ pricing_df = pd.DataFrame([
     for t in calc["pricing_tiers"]
 ])
 st.caption(f'PTU pricing tiers (for {calc["recommended_ptu"]:,.0f} PTUs) — same layout as the Foundry PTU calculator')
-st.dataframe(pricing_df, use_container_width=True, hide_index=True)
+st.dataframe(pricing_df, width="stretch", hide_index=True)
 
 chart_df = pd.DataFrame([
     {"Scenario": "Baseline PTU", "PTUs": calc["recommended_ptu"]},
@@ -365,7 +365,7 @@ ptu_chart = (
         tooltip=["Scenario", "PTUs"],
     )
 )
-st.altair_chart(ptu_chart, use_container_width=True)
+st.altair_chart(ptu_chart, width="stretch")
 
 summary_df = pd.DataFrame([
     ["Average input-equivalent TPM", calc["avg_tpm"]],
@@ -377,7 +377,7 @@ summary_df = pd.DataFrame([
 ], columns=["Metric", "Value"])
 summary_df["Value"] = summary_df["Value"].map(lambda x: f"{x:,.0f}")
 st.subheader("Calculation summary")
-st.dataframe(summary_df, use_container_width=True, hide_index=True)
+st.dataframe(summary_df, width="stretch", hide_index=True)
 
 st.markdown("---")
 st.caption(
