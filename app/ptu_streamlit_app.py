@@ -444,13 +444,13 @@ if _be["rows"]:
     if _diff > 0:
         st.success(
             f"**Recommended: provision PTU ({_be_tier}).** At your current load of "
-            f"{_be['current_rpm']:,.0f} RPM it runs **~${_diff:,.0f}/mo cheaper** than PAYGO "
-            f"(${_tier_ptu_now:,.0f} vs ${_paygo_now:,.0f})."
+            f"{_be['current_rpm']:,.0f} RPM it runs **~\\${_diff:,.0f}/mo cheaper** than PAYGO "
+            f"(\\${_tier_ptu_now:,.0f} vs \\${_paygo_now:,.0f})."
         )
     else:
         st.info(
-            f"**PTU ({_be_tier}) costs ~${-_diff:,.0f}/mo more than PAYGO** at your current load of "
-            f"{_be['current_rpm']:,.0f} RPM (${_tier_ptu_now:,.0f} vs ${_paygo_now:,.0f}). "
+            f"**PTU ({_be_tier}) costs ~\\${-_diff:,.0f}/mo more than PAYGO** at your current load of "
+            f"{_be['current_rpm']:,.0f} RPM (\\${_tier_ptu_now:,.0f} vs \\${_paygo_now:,.0f}). "
             f"**PTU may still be the right call above this cost premium** — for guaranteed throughput, "
             f"consistent low latency, and no PAYGO rate-limiting (429s)."
         )
