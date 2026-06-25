@@ -426,11 +426,55 @@ _be_tier_label = {
 _be = breakeven_series(values, ptu_tier=_be_tier)
 if _be["rows"]:
     _rpm_label = "Peak requests per minute" if foundry_mode else "Average requests per minute"
+    _rpm_top = _be["rows"][-1]["rpm"]
     be_records = []
     for _r in _be["rows"]:
         be_records.append({"RPM": _r["rpm"], "Lane": _be_tier_label, "Monthly $": _r["ptu_monthly"]})
         be_records.append({"RPM": _r["rpm"], "Lane": "PAYGO", "Monthly $": _r["paygo_monthly"]})
     be_df = pd.DataFrame(be_records)
+
+    # Recommended-choice callout: compare PTU (selected tier) vs PAYGO at the
+    # current operating point so the chart resolves to an actual decision.
+    _tier_ptu_now = next(
+        (t["total_monthly"] for t in calc["pricing_tiers"] if t["term"] == _be_tier),
+        calc["ptu_monthly"],
+    )
+    _paygo_now = calc["paygo_monthly"]
+    _diff = _paygo_now - _tier_ptu_now  # > 0 means PTU is cheaper at current load
+    if _diff > 0:
+        st.success(
+            f"**Recommended: provision PTU ({_be_tier}).** At your current load of "
+            f"{_be['current_rpm']:,.0f} RPM it runs **~${_diff:,.0f}/mo cheaper** than PAYGO "
+            f"(${_tier_ptu_now:,.0f} vs ${_paygo_now:,.0f})."
+        )
+    else:
+        st.info(
+            f"**Recommended: stay on PAYGO.** At your current load of "
+            f"{_be['current_rpm']:,.0f} RPM it runs **~${-_diff:,.0f}/mo cheaper** than a {_be_tier} PTU "
+            f"(${_paygo_now:,.0f} vs ${_tier_ptu_now:,.0f})."
+        )
+
+    # Region shading: green where PAYGO is the cheaper architecture, blue where
+    # the PTU baseline wins. Drawn first so the cost lines sit on top.
+    be_layers = []
+    if _be["breakeven_rpm"]:
+        be_layers.append(
+            alt.Chart(pd.DataFrame({"x0": [0.0], "x1": [_be["breakeven_rpm"]]}))
+            .mark_rect(color="#2e7d32", opacity=0.07)
+            .encode(x=alt.X("x0:Q", axis=None), x2="x1:Q")
+        )
+        be_layers.append(
+            alt.Chart(pd.DataFrame({"x0": [_be["breakeven_rpm"]], "x1": [_rpm_top]}))
+            .mark_rect(color="#0a6ed1", opacity=0.07)
+            .encode(x=alt.X("x0:Q", axis=None), x2="x1:Q")
+        )
+    else:
+        be_layers.append(
+            alt.Chart(pd.DataFrame({"x0": [0.0], "x1": [_rpm_top]}))
+            .mark_rect(color="#2e7d32", opacity=0.06)
+            .encode(x=alt.X("x0:Q", axis=None), x2="x1:Q")
+        )
+
     be_lines = (
         alt.Chart(be_df)
         .mark_line()
@@ -441,7 +485,7 @@ if _be["rows"]:
             tooltip=[alt.Tooltip("RPM:Q", format=",.0f"), "Lane", alt.Tooltip("Monthly $:Q", format=",.0f")],
         )
     )
-    be_layers = [be_lines]
+    be_layers.append(be_lines)
     be_layers.append(
         alt.Chart(pd.DataFrame({"RPM": [_be["current_rpm"]]}))
         .mark_rule(strokeDash=[4, 4], color="#6b6b75")
@@ -453,17 +497,33 @@ if _be["rows"]:
             .mark_rule(color="#0a6ed1")
             .encode(x="RPM:Q")
         )
+        # Crossover annotation: dot + label at the break-even cost so the exact
+        # dollar figure is readable, not just the RPM.
+        _be_cost = calculate({**values, "avg_rpm": _be["breakeven_rpm"]})["paygo_monthly"]
+        _dot_df = pd.DataFrame({
+            "RPM": [_be["breakeven_rpm"]],
+            "Monthly $": [_be_cost],
+            "label": [f"${_be_cost:,.0f}/mo @ {_be['breakeven_rpm']:,.0f} RPM"],
+        })
+        be_layers.append(
+            alt.Chart(_dot_df).mark_point(size=90, filled=True, color="#0a6ed1").encode(x="RPM:Q", y="Monthly $:Q")
+        )
+        be_layers.append(
+            alt.Chart(_dot_df)
+            .mark_text(align="left", dx=8, dy=-8, color="#0a6ed1", fontWeight="bold")
+            .encode(x="RPM:Q", y="Monthly $:Q", text="label:N")
+        )
     be_chart = alt.layer(*be_layers).properties(height=360, padding={"left": 5, "top": 5, "right": 5, "bottom": 45})
     st.altair_chart(be_chart, width="stretch")
     if _be["breakeven_rpm"]:
         _be_side = "above" if _be["current_rpm"] >= _be["breakeven_rpm"] else "below"
         st.caption(
-            f"Break-even ≈ **{_be['breakeven_rpm']:,.0f} RPM** (blue line) at the **{_be_tier}** tier: past it the PTU baseline is cheaper than PAYGO. "
+            f"Break-even ≈ **{_be['breakeven_rpm']:,.0f} RPM** (blue dot) at the **{_be_tier}** tier: the green band is where PAYGO is cheaper, the blue band where PTU wins. "
             f"Your current load of {_be['current_rpm']:,.0f} RPM (grey dashed) sits **{_be_side}** break-even."
         )
     else:
         st.caption(
-            f"Across the charted range PAYGO stays cheaper than the **{_be_tier}** PTU baseline — this workload is below the PTU break-even. "
+            f"Across the charted range PAYGO stays cheaper than the **{_be_tier}** PTU baseline (green band) — this workload is below the PTU break-even. "
             f"Current load: {_be['current_rpm']:,.0f} RPM (grey dashed). Try the yearly tier to lower the PTU line."
         )
 
