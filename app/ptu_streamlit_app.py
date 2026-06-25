@@ -523,9 +523,13 @@ if _be["rows"]:
             f"Your current load of {_be['current_rpm']:,.0f} RPM (grey dashed) sits **{_be_side}** break-even."
         )
     else:
+        _cheaper_hint = (
+            "" if _be_tier == "Yearly reservation"
+            else " — or try a longer reservation term to lower the PTU line"
+        )
         st.caption(
             f"Across the charted range PAYGO stays cheaper on price than the **{_be_tier}** PTU baseline (green band) — this workload sits below the PTU cost break-even. "
-            f"Current load: {_be['current_rpm']:,.0f} RPM (grey dashed). PTU can still be worth it for guaranteed throughput, steady latency, and no 429 throttling — or try the yearly tier to lower the PTU line."
+            f"Current load: {_be['current_rpm']:,.0f} RPM (grey dashed). PTU can still be worth it for guaranteed throughput, steady latency, and no 429 throttling{_cheaper_hint}."
         )
 
 # One-click shareable report — a self-contained HTML file stakeholders can open
