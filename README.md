@@ -140,6 +140,8 @@ Plenty of community tools size PTUs, compare AI costs, or list region availabili
 
 **In short:** other tools tell you *how many PTUs* and *what they cost*. This one tells you **whether to buy PTUs at all, what architecture to wrap around them, and where each deployment type is actually available** — ideally seeded from your **real usage telemetry** (see [Token usage reporting](#token-usage-reporting)).
 
+> 📄 **Further reading:** the thinking behind this tool is written up in the [Architecture-Driven Capacity Planning whitepaper](docs/Architecture_Driven_Capacity_Planning_Whitepaper.docx) — a decision-first model for enterprise AI capacity planning.
+
 ## The PTU decision triangle
 
 Every PTU decision trades off three forces. PTU sits in the middle — you lean toward whichever corner the workload demands:
@@ -179,7 +181,7 @@ flowchart TD
 | --- | --- |
 | [app/](app) | The PTU sizing tool. `ptu_core.py` (sizing engine), `ptu_streamlit_app.py` (Streamlit UI), `PTU_Sizing_Notebook.ipynb` (notebook), `test_ptu_core.py` (tests), the bundled `region_data.json` snapshot, plus the app `README.md` and `requirements.txt`. |
 | [scripts/](scripts) | Operations and demo tooling. `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` + `region-refresh-job.yaml` (regenerate region availability via the Azure Models API / daily Container Apps Job), `token_usage.py` (per-deployment / per-model token usage across a subscription, with a `--demo` synthetic mode), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), `demo_play.ps1` / `demo_play.sh` (self-running narrated demo playback; add `-Short`/`--short` for a teaser), and `test_token_usage.py` / `test_usage_to_sizing.py` (tests). |
-| [docs/](docs) | Supporting assets: `app-screenshot.png`, `PTU_decision_triangle.png`, and `demo-script.md` (timed demo narration / recording guide). |
+| [docs/](docs) | Supporting assets: `app-screenshot.png`, `PTU_decision_triangle.png`, `demo-script.md` (timed demo narration / recording guide), and `Architecture_Driven_Capacity_Planning_Whitepaper.docx` (the architecture-first capacity-planning whitepaper behind this tool). |
 | [linkedin/](linkedin) | `ptu_post.md` — a ready-to-share LinkedIn post about the tool. |
 | Root | `README.md`, `requirements.txt` (deploy/runtime deps for App Service; the `app/` copy adds `pytest` for local dev + tests), `pyproject.toml` (packaging + pytest config), and `LICENSE` / `CODE_OF_CONDUCT.md` / `CONTRIBUTING.md` / `SECURITY.md`. |
 
