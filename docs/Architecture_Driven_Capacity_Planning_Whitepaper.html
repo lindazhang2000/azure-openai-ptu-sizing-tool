@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture-Driven Capacity Planning for Enterprise AI Workloads</title>
+<style>
+  :root {
+    --accent: #0a6ed1;
+    --accent-soft: #e8f1fb;
+    --ink: #1b1b1f;
+    --muted: #5a5a66;
+    --line: #e3e3e8;
+    --bg: #ffffff;
+    --code-bg: #f4f6f9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #f7f8fa;
+    margin: 0;
+    line-height: 1.65;
+  }
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    background: var(--bg);
+    padding: 56px 64px 72px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-size: 2.1rem;
+    line-height: 1.2;
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    font-size: 1.1rem;
+    color: var(--muted);
+    font-weight: 400;
+    margin: 0 0 20px;
+  }
+  .byline {
+    font-size: 0.95rem;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 0;
+    margin-bottom: 32px;
+  }
+  .byline strong { color: var(--ink); }
+  h2 {
+    font-size: 1.45rem;
+    margin: 44px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent-soft);
+  }
+  h3 {
+    font-size: 1.12rem;
+    margin: 28px 0 10px;
+    color: #2c2c34;
+  }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  .note {
+    background: var(--accent-soft);
+    border-left: 4px solid var(--accent);
+    padding: 14px 18px;
+    border-radius: 0 6px 6px 0;
+    margin: 20px 0;
+    font-size: 0.95rem;
+  }
+  .callout {
+    background: #fff8e6;
+    border-left: 4px solid #e0a800;
+    padding: 14px 18px;
+    border-radius: 0 6px 6px 0;
+    margin: 20px 0;
+  }
+  .callout .label, .note .label {
+    display: block;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    color: var(--muted);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18px 0 24px;
+    font-size: 0.93rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    background: var(--code-bg);
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: #fafbfc; }
+  figure {
+    margin: 28px 0;
+    text-align: center;
+  }
+  figure img {
+    max-width: 420px;
+    width: 100%;
+    height: auto;
+  }
+  figcaption {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 8px;
+    font-style: italic;
+  }
+  .oneliner {
+    font-size: 1.05rem;
+    font-style: italic;
+    color: #2c2c34;
+    border-left: 4px solid var(--accent);
+    padding-left: 16px;
+    margin: 18px 0;
+  }
+  a { color: var(--accent); }
+  .refs { font-size: 0.9rem; }
+  .refs a { word-break: break-all; }
+  footer {
+    margin-top: 48px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  @media print {
+    body { background: #fff; }
+    .page { box-shadow: none; max-width: none; padding: 0; }
+  }
+  @media (max-width: 640px) {
+    .page { padding: 32px 22px 48px; }
+    h1 { font-size: 1.7rem; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <span class="eyebrow">Public Whitepaper</span>
+  <h1>Architecture-Driven Capacity Planning for Enterprise AI Workloads</h1>
+  <p class="subtitle">Moving beyond sizing toward intelligent deployment decisions</p>
+  <p class="byline"><strong>Linda Zhang</strong> &middot; Microsoft &middot; June 2026</p>
+
+  <div class="note">
+    <span class="label">Public-facing note</span>
+    This paper is intended as technical guidance for capacity planning discussions. It is not a
+    replacement for official Microsoft documentation, the Microsoft Foundry capacity calculator,
+    Azure pricing tools, or customer-specific benchmarking.
+  </div>
+
+  <figure>
+    <img src="PTU_decision_triangle.png" alt="Baseline + burst capacity model: reserved baseline layer plus elastic burst layer">
+    <figcaption>Core architecture model — a reserved baseline layer (PTU) handles predictable demand; an elastic burst layer (PAYGO / Standard) absorbs spikes.</figcaption>
+  </figure>
+
+  <h2>Executive Summary</h2>
+  <p>As enterprises scale generative AI into production, capacity planning often becomes one of the
+    most important architecture decisions. Teams commonly ask, &ldquo;How much capacity do I need?&rdquo;
+    The better question is, &ldquo;What deployment model should support this workload reliably,
+    cost-effectively, and at production scale?&rdquo;</p>
+  <p>This whitepaper introduces a decision-first approach to AI workload capacity planning. The goal
+    is to help teams align deployment models with workload behavior, balance performance and cost, and
+    transition from experimentation to production with greater confidence.</p>
+  <ul>
+    <li>Align capacity strategy to traffic shape, token usage, latency sensitivity, and operational requirements.</li>
+    <li>Separate steady-state baseline demand from burst or peak demand.</li>
+    <li>Use real workload signals and benchmarking to validate assumptions before committing to production capacity.</li>
+    <li>Treat sizing as a validation step after the architecture pattern has been selected.</li>
+  </ul>
+
+  <h2>Why AI Deployments Stall</h2>
+  <p>In many production AI programs, capacity planning happens too late. Architecture decisions are
+    made first, and sizing is treated as a downstream calculation. That sequence creates avoidable
+    risk: teams can over-commit to dedicated capacity, under-plan for latency-sensitive usage, or miss
+    the economics of hybrid deployment patterns.</p>
+  <h3>Common planning gaps</h3>
+  <ul>
+    <li><strong>Decision happens too late:</strong> capacity model selection is delayed until after the workload architecture is already mostly fixed.</li>
+    <li><strong>Static inputs dominate:</strong> teams use average request volumes without understanding peak behavior, output-token mix, cache impact, or traffic variability.</li>
+    <li><strong>Architecture awareness is missing:</strong> a calculator may help estimate capacity, but it does not always answer whether dedicated capacity, usage-based capacity, or a hybrid model is the right starting point.</li>
+    <li><strong>Telemetry is underused:</strong> many planning exercises rely on assumptions instead of observed token usage and production traffic patterns.</li>
+  </ul>
+  <div class="callout">
+    <span class="label">Point of view</span>
+    Capacity planning is not just a math problem. It is an architecture decision, and it should be
+    framed that way from the beginning.
+  </div>
+
+  <h2>A Decision-First Planning Model</h2>
+  <p>A decision-first model starts with workload behavior, then maps that behavior to the right
+    architecture pattern. Only after that should teams size capacity, validate cost, and prepare
+    deployment operations.</p>
+
+  <h3>Step 1 — Understand workload behavior</h3>
+  <ul>
+    <li>Is traffic predictable, spiky, or seasonal?</li>
+    <li>Are requests latency-sensitive or batch-oriented?</li>
+    <li>What are the average and peak requests per minute?</li>
+    <li>What is the input/output token mix?</li>
+    <li>How much of the workload can benefit from prompt caching?</li>
+    <li>Are there data residency, governance, or isolation requirements?</li>
+  </ul>
+
+  <h3>Step 2 — Select the architecture pattern</h3>
+  <table>
+    <thead>
+      <tr><th>Architecture pattern</th><th>Best fit</th><th>Planning implication</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Dedicated / baseline-focused</strong></td>
+        <td>Stable, predictable, latency-sensitive production workloads</td>
+        <td>Use provisioned capacity for steady-state demand; validate with official sizing tools and benchmark results.</td>
+      </tr>
+      <tr>
+        <td><strong>Elastic / usage-based</strong></td>
+        <td>Variable or bursty workloads where demand is difficult to predict</td>
+        <td>Pay-per-token or usage-based patterns can reduce over-commitment risk during early or unpredictable demand.</td>
+      </tr>
+      <tr>
+        <td><strong>Hybrid baseline + elastic</strong></td>
+        <td>Common enterprise pattern with stable baseline plus burst periods</td>
+        <td>Use dedicated capacity for baseline and elastic routing for peaks; monitor usage and optimize continuously.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Step 3 — Size and validate</h3>
+  <p>Sizing should validate the selected pattern, not drive the entire architecture by itself. At
+    this stage, teams should use official Microsoft sizing guidance and the Microsoft Foundry capacity
+    calculator, benchmark representative traffic, and validate cost with the current pricing model.</p>
+
+  <h2>Design Principle: Baseline vs. Peak</h2>
+  <p>The core planning principle is simple: <strong>design for baseline, scale for peak.</strong>
+    Baseline demand is the predictable portion of the workload that can justify dedicated capacity.
+    Peak demand is the burst portion that should be treated separately rather than forcing the entire
+    system to be sized to rare spikes.</p>
+  <ul>
+    <li><strong>Baseline demand:</strong> predictable traffic that can be served with committed or dedicated capacity.</li>
+    <li><strong>Peak demand:</strong> less predictable traffic that may require spillover, queueing, throttling strategy, elastic capacity, or usage-based handling.</li>
+    <li><strong>Optimization loop:</strong> monitor actual usage, compare against assumptions, and revisit the architecture as the workload matures.</li>
+  </ul>
+
+  <h2>Bringing Data Into the Decision</h2>
+  <p>Modern AI systems generate usage signals that should be part of the capacity planning process.
+    Planning based only on estimates creates avoidable error. Planning with telemetry creates a
+    repeatable decision model that can improve over time.</p>
+  <ul>
+    <li>Requests per minute and traffic distribution over time</li>
+    <li>Input tokens, output tokens, and prompt-cache behavior</li>
+    <li>P95 / P99 traffic patterns, not only average values</li>
+    <li>Latency and utilization metrics from test or production deployments</li>
+    <li>Deployment type, quota, availability, and regional considerations</li>
+  </ul>
+  <div class="callout">
+    <span class="label">Practical recommendation</span>
+    Before production rollout, benchmark with representative traffic. For existing workloads, use
+    observed token usage and throughput patterns to seed sizing assumptions and validate the
+    architecture pattern.
+  </div>
+
+  <h2>From Experimentation to Production</h2>
+  <p>The move from proof of concept to production is rarely just a model-selection exercise. It
+    requires a production platform view: deployment strategy, capacity model, monitoring, routing,
+    cost governance, and operational ownership.</p>
+  <ul>
+    <li>Predictable performance and latency for user-facing or agentic applications</li>
+    <li>Cost controls that scale with actual usage and business value</li>
+    <li>Governance and workload isolation for multi-team enterprise deployments</li>
+    <li>Monitoring and review cycles to prevent capacity plans from becoming stale</li>
+    <li>A clear escalation path when quota, capacity, or deployment availability creates delivery risk</li>
+  </ul>
+
+  <h2>Positioning in the Enterprise AI Stack</h2>
+  <p>Capacity planning should sit inside the broader enterprise AI platform layer. It connects model
+    selection, deployment strategy, routing, API management, observability, and cost governance. When
+    those decisions are handled together, teams can move faster without treating every workload as a
+    one-off capacity exercise.</p>
+  <table>
+    <thead>
+      <tr><th>Platform layer</th><th>Capacity planning role</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Model selection</strong></td><td>Choose models with the right latency, cost, and throughput characteristics.</td></tr>
+      <tr><td><strong>Routing and API management</strong></td><td>Apply routing or spillover patterns based on demand shape and resiliency needs.</td></tr>
+      <tr><td><strong>Observability</strong></td><td>Use telemetry to compare real usage against planning assumptions.</td></tr>
+      <tr><td><strong>Cost governance</strong></td><td>Map capacity decisions to chargeback, reservations, utilization, and optimization reviews.</td></tr>
+      <tr><td><strong>Production operations</strong></td><td>Scale, monitor, and optimize as traffic and model portfolios evolve.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Business Impact</h2>
+  <p>An architecture-first approach helps teams reduce deployment friction and improve the quality of
+    capacity conversations across engineering, platform, and business stakeholders.</p>
+  <table>
+    <thead>
+      <tr><th>Engineering teams</th><th>Business stakeholders</th><th>Platform teams</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Faster movement from design to production; fewer re-architecture cycles; clearer performance expectations</td>
+        <td>Better cost-performance alignment; reduced deployment risk; more transparent capacity rationale</td>
+        <td>Standardized patterns; improved governance and reuse; capacity planning tied to operating signals</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Strategic Takeaways</h2>
+  <ul>
+    <li>Capacity planning is an architecture decision, not only a calculation.</li>
+    <li>Real workload behavior should guide whether a workload uses dedicated capacity, usage-based capacity, or a hybrid pattern.</li>
+    <li>Baseline and peak demand should be modeled separately to avoid over-provisioning and production surprises.</li>
+    <li>Telemetry and benchmarking should be used to validate assumptions before and after production rollout.</li>
+    <li>Hybrid patterns are likely to be important for many enterprise AI workloads because they balance predictable baseline demand with elasticity for spikes.</li>
+  </ul>
+
+  <h2>Conclusion</h2>
+  <p>As enterprise AI adoption accelerates, successful teams will differentiate not only by what they
+    build, but by how reliably and economically they operate AI workloads at scale. A decision-first,
+    architecture-aware planning model shifts the conversation upstream: from &ldquo;how many PTUs do we
+    need?&rdquo; to &ldquo;what operating model best fits this workload?&rdquo;</p>
+  <p>That shift helps teams make better deployment decisions, reduce capacity planning friction, and
+    create sustainable production systems that can evolve as usage patterns change.</p>
+  <p class="oneliner">Most calculators tell you how much capacity to estimate. An architecture-driven
+    approach helps you decide whether dedicated capacity is the right model in the first place — and
+    what deployment pattern to build around it.</p>
+
+  <h2>References and Further Reading</h2>
+  <ul class="refs">
+    <li>Microsoft Learn — Determine PTU sizing for a workload:
+      <a href="https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/provisioned-throughput-sizing">learn.microsoft.com/.../provisioned-throughput-sizing</a></li>
+    <li>Microsoft Learn — Provisioned throughput for Foundry Models:
+      <a href="https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/provisioned-throughput">learn.microsoft.com/.../provisioned-throughput</a></li>
+    <li>Microsoft Learn — Provisioned throughput billing and cost management:
+      <a href="https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/provisioned-throughput-billing">learn.microsoft.com/.../provisioned-throughput-billing</a></li>
+  </ul>
+
+  <footer>
+    Public whitepaper &middot; Technical guidance only. Validate all technical claims against current
+    Microsoft Learn guidance before external publication. Not a replacement for official Microsoft
+    documentation, the Microsoft Foundry capacity calculator, or customer-specific benchmarking.
+  </footer>
+
+</div>
+</body>
+</html>
