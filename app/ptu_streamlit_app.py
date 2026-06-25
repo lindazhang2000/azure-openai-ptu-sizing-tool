@@ -424,6 +424,7 @@ _be_tier_label = {
     "Yearly reservation": "PTU (1-yr reservation)",
 }[_be_tier]
 _be = breakeven_series(values, ptu_tier=_be_tier)
+_be_verdict = None  # populated below; carried into the exported report
 if _be["rows"]:
     _rpm_label = "Peak requests per minute" if foundry_mode else "Average requests per minute"
     _rpm_top = _be["rows"][-1]["rpm"]
@@ -454,6 +455,20 @@ if _be["rows"]:
             f"**PTU may still be the right call above this cost premium** — for guaranteed throughput, "
             f"consistent low latency, and no PAYGO rate-limiting (429s)."
         )
+
+    # Capture the decision so the exported report carries it, not just the inputs.
+    _be_verdict = {
+        "tier": _be_tier,
+        "current_rpm": _be["current_rpm"],
+        "ptu_now": _tier_ptu_now,
+        "paygo_now": _paygo_now,
+        "diff": _diff,  # > 0 means PTU is cheaper at current load
+        "breakeven_rpm": _be["breakeven_rpm"],
+        "breakeven_cost": (
+            calculate({**values, "avg_rpm": _be["breakeven_rpm"]})["paygo_monthly"]
+            if _be["breakeven_rpm"] else None
+        ),
+    }
 
     # Region shading: green where PAYGO is the cheaper architecture, blue where
     # the PTU baseline wins. Drawn first so the cost lines sit on top.
@@ -539,6 +554,7 @@ _report_meta = {
     "deployment_type": deployment_type,
     "region": region,
     "foundry_mode": foundry_mode,
+    "breakeven": _be_verdict,
 }
 _report_html = build_report_html(values, calc, _report_meta)
 _safe_stem = f'ptu-sizing-{str(selected_model).replace(" ", "_")}-{deployment_type.replace(" ", "_")}'

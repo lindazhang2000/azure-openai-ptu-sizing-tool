@@ -670,3 +670,52 @@ def test_build_report_csv_marks_priority_not_applicable_when_unsupported():
     assert "Priority processing,n/a" in csv_out
 
 
+def test_reports_include_breakeven_section_when_provided():
+    r = calculate(DEFAULTS)
+    verdict = {
+        "tier": "Monthly reservation",
+        "current_rpm": 60.0,
+        "ptu_now": r["ptu_monthly"],
+        "paygo_now": r["paygo_monthly"],
+        "diff": r["paygo_monthly"] - r["ptu_monthly"],
+        "breakeven_rpm": 240.0,
+        "breakeven_cost": 21707.0,
+    }
+    meta = {"model": "gpt-4.1", "breakeven": verdict}
+    csv_out = ptu_core.build_report_csv(DEFAULTS, r, meta)
+    html_out = ptu_core.build_report_html(DEFAULTS, r, meta)
+    # CSV carries a Break-even section with the tier, crossover and a verdict.
+    assert "Break-even,PTU pricing tier,Monthly reservation" in csv_out
+    assert "Break-even,Crossover RPM,240" in csv_out
+    assert "Break-even,Verdict," in csv_out
+    # HTML renders the section heading and crossover figure.
+    assert "Break-even decision" in html_out
+    assert "240 RPM" in html_out
+
+
+def test_reports_breakeven_section_handles_no_crossover():
+    r = calculate(DEFAULTS)
+    verdict = {
+        "tier": "Yearly reservation",
+        "current_rpm": 60.0,
+        "ptu_now": r["ptu_monthly"],
+        "paygo_now": r["paygo_monthly"],
+        "diff": r["paygo_monthly"] - r["ptu_monthly"],
+        "breakeven_rpm": None,
+        "breakeven_cost": None,
+    }
+    meta = {"breakeven": verdict}
+    csv_out = ptu_core.build_report_csv(DEFAULTS, r, meta)
+    html_out = ptu_core.build_report_html(DEFAULTS, r, meta)
+    assert "Break-even,Crossover RPM,No crossover in range" in csv_out
+    assert "No crossover in charted range" in html_out
+
+
+def test_reports_omit_breakeven_section_when_absent():
+    r = calculate(DEFAULTS)
+    csv_out = ptu_core.build_report_csv(DEFAULTS, r, {"model": "gpt-4o"})
+    html_out = ptu_core.build_report_html(DEFAULTS, r, {"model": "gpt-4o"})
+    assert "Break-even" not in csv_out
+    assert "Break-even decision" not in html_out
+
+

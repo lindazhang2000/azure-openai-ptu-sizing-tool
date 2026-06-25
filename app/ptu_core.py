@@ -567,6 +567,27 @@ def calculate(values):
     }
 
 
+def _breakeven_verdict_text(be):
+    """One-line verdict for the break-even section, shared by both report builders.
+
+    ``be`` is the verdict dict assembled in the app: ``tier``, ``current_rpm``,
+    ``diff`` (PAYGO minus PTU at current load; > 0 means PTU is cheaper).
+    """
+    tier = be.get("tier", "PTU")
+    diff = be.get("diff", 0.0)
+    rpm = be.get("current_rpm", 0.0)
+    if diff > 0:
+        return (
+            f"Provision PTU ({tier}): ~${diff:,.0f}/mo cheaper than PAYGO at the "
+            f"current load of {rpm:,.0f} RPM."
+        )
+    return (
+        f"PTU ({tier}) costs ~${-diff:,.0f}/mo more than PAYGO at {rpm:,.0f} RPM, "
+        f"but may still be the right call for guaranteed throughput, steady latency, "
+        f"and no 429 throttling."
+    )
+
+
 def build_report_html(values, calc, meta=None):
     """Render a self-contained, printable HTML sizing report for stakeholders.
 
@@ -666,6 +687,34 @@ def build_report_html(values, calc, meta=None):
         for t in calc.get("pricing_tiers", [])
     )
 
+    # Break-even decision (optional) — the chart's verdict in writing.
+    be = meta.get("breakeven")
+    if be:
+        diff = be.get("diff", 0.0)
+        cross = be.get("breakeven_rpm")
+        be_rows = [
+            ("PTU pricing tier", esc(be.get("tier", "-"))),
+            ("Current load", f'{num(be.get("current_rpm", 0))} RPM'),
+            ("PTU at current load", money(be.get("ptu_now", 0))),
+            ("PAYGO at current load", money(be.get("paygo_now", 0))),
+            ("PTU vs PAYGO at current load",
+             f'{money(abs(diff))}/mo {"cheaper" if diff > 0 else "more expensive"}'),
+            ("Crossover (RPM where PTU wins)",
+             f'{num(cross)} RPM' if cross else "No crossover in charted range"),
+        ]
+        if cross and be.get("breakeven_cost") is not None:
+            be_rows.append(("Monthly cost at crossover", money(be["breakeven_cost"])))
+        be_table = "".join(
+            f"<tr><td>{esc(l)}</td><td class='r'>{v}</td></tr>" for l, v in be_rows
+        )
+        breakeven_html = (
+            '<h2>Break-even decision</h2>'
+            f'<table>{be_table}</table>'
+            f'<p class="muted">{esc(_breakeven_verdict_text(be))}</p>'
+        )
+    else:
+        breakeven_html = ""
+
     # Workload inputs.
     input_rows = [
         ("Average RPM" if not foundry_mode else "Peak RPM", num(values.get("avg_rpm", 0))),
@@ -763,6 +812,8 @@ def build_report_html(values, calc, meta=None):
   <p class="muted"><b>{esc(savings_label)}:</b> {money(abs(calc["savings_delta"]))} / month.
      Priority processing requires model version 2025-12-01+ and Global or Data Zone (US) Standard;
      Data Zone priority covers US data zones only.</p>
+
+  {breakeven_html}
 
   <h2>PTU pricing tiers (for {num(calc["recommended_ptu"])} PTUs)</h2>
   <table>
@@ -905,6 +956,23 @@ def build_report_csv(values, calc, meta=None):
 
     for tier in calc.get("pricing_tiers", []):
         add("PTU pricing tiers", tier["term"], f'{tier["total_monthly"]:.2f}')
+
+    be = meta.get("breakeven")
+    if be:
+        diff = be.get("diff", 0.0)
+        cross = be.get("breakeven_rpm")
+        add("Break-even", "PTU pricing tier", be.get("tier", "-"))
+        add("Break-even", "Current load (RPM)", f'{be.get("current_rpm", 0):.0f}')
+        add("Break-even", "PTU at current load", f'{be.get("ptu_now", 0):.2f}')
+        add("Break-even", "PAYGO at current load", f'{be.get("paygo_now", 0):.2f}')
+        add("Break-even",
+            "PTU cheaper than PAYGO" if diff > 0 else "PTU costlier than PAYGO",
+            f'{abs(diff):.2f}')
+        add("Break-even", "Crossover RPM",
+            f'{cross:.0f}' if cross else "No crossover in range")
+        if cross and be.get("breakeven_cost") is not None:
+            add("Break-even", "Monthly cost at crossover", f'{be["breakeven_cost"]:.2f}')
+        add("Break-even", "Verdict", _breakeven_verdict_text(be))
 
     add("Workload input", "Average RPM" if not foundry_mode else "Peak RPM",
         f'{values.get("avg_rpm", 0):.0f}')
