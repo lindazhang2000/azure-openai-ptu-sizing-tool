@@ -1,0 +1,2 @@
+# Keep shell scripts LF so they run on macOS/Linux regardless of host autocrlf.
+*.sh text eol=lf
