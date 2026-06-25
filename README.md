@@ -122,7 +122,7 @@ The two are **complementary, not competing**. Microsoft's calculator is the auth
 
 Every PTU decision trades off three forces. PTU sits in the middle — you lean toward whichever corner the workload demands:
 
-<img src="PTU_decision_triangle.png" alt="PTU decision triangle: Performance at the apex, Cost (pay-as-you-go) and Flexibility (hybrid) as the two base corners, with PTU balancing all three in the center." width="420" />
+<img src="docs/PTU_decision_triangle.png" alt="PTU decision triangle: Performance at the apex, Cost (pay-as-you-go) and Flexibility (hybrid) as the two base corners, with PTU balancing all three in the center." width="420" />
 
 | Corner | What it optimizes for | How it maps to this tool |
 | --- | --- | --- |
@@ -155,8 +155,11 @@ flowchart TD
 
 | Path | Contents |
 | --- | --- |
-| [app/](app) | The PTU sizing tool: Streamlit app, notebook, README, requirements, and the bundled `region_data.json` snapshot. |
-| [scripts/](scripts) | Operations: `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` (regenerate region availability from the Azure Models API), `token_usage.py` (per-deployment / per-model token usage across the subscription), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), and `region-refresh-job.yaml` (the daily Container Apps Job definition). |
+| [app/](app) | The PTU sizing tool. `ptu_core.py` (sizing engine), `ptu_streamlit_app.py` (Streamlit UI), `PTU_Sizing_Notebook.ipynb` (notebook), `test_ptu_core.py` (tests), the bundled `region_data.json` snapshot, plus the app `README.md` and `requirements.txt`. |
+| [scripts/](scripts) | Operations and demo tooling. `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` + `region-refresh-job.yaml` (regenerate region availability via the Azure Models API / daily Container Apps Job), `token_usage.py` (per-deployment / per-model token usage across a subscription, with a `--demo` synthetic mode), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), `demo_play.ps1` / `demo_play.sh` (self-running narrated demo playback; add `-Short`/`--short` for a teaser), and `test_token_usage.py` / `test_usage_to_sizing.py` (tests). |
+| [docs/](docs) | Supporting assets: `app-screenshot.png`, `PTU_decision_triangle.png`, and `demo-script.md` (timed demo narration / recording guide). |
+| [linkedin/](linkedin) | `ptu_post.md` — a ready-to-share LinkedIn post about the tool. |
+| Root | `README.md`, `requirements.txt` (deploy/runtime deps for App Service; the `app/` copy adds `pytest` for local dev + tests), `pyproject.toml` (packaging + pytest config), and `LICENSE` / `CODE_OF_CONDUCT.md` / `CONTRIBUTING.md` / `SECURITY.md`. |
 
 ## Running the tool
 
