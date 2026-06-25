@@ -183,7 +183,7 @@ flowchart TD
 | [scripts/](scripts) | Operations and demo tooling. `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` + `region-refresh-job.yaml` (regenerate region availability via the Azure Models API / daily Container Apps Job), `token_usage.py` (per-deployment / per-model token usage across a subscription, with a `--demo` synthetic mode), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), `demo_play.ps1` / `demo_play.sh` (self-running narrated demo playback; add `-Short`/`--short` for a teaser), and `test_token_usage.py` / `test_usage_to_sizing.py` (tests). |
 | [docs/](docs) | Supporting assets: `app-screenshot.png`, `PTU_decision_triangle.png`, `demo-script.md` (timed demo narration / recording guide), and the architecture-first capacity-planning whitepaper behind this tool (`Architecture_Driven_Capacity_Planning_Whitepaper.html` and `.docx`). |
 | [linkedin/](linkedin) | `ptu_post.md` — a ready-to-share LinkedIn post about the tool. |
-| Root | `README.md`, `requirements.txt` (deploy/runtime deps for App Service; the `app/` copy adds `pytest` for local dev + tests), `pyproject.toml` (packaging + pytest config), and `LICENSE` / `CODE_OF_CONDUCT.md` / `CONTRIBUTING.md` / `SECURITY.md`. |
+| Root | `README.md`, `requirements.txt` (deploy/runtime deps for App Service; the `app/` copy adds `pytest` for local dev + tests), `pyproject.toml` (packaging + pytest config), and `LICENSE`. |
 
 ## Running the tool
 
@@ -493,14 +493,8 @@ The tool's sizing formula mirrors the official **normalized TPM** method. Always
 
 ## Contributing
 
-This project welcomes contributions and suggestions. See [CONTRIBUTING.md](CONTRIBUTING.md) for details. Most contributions require you to agree to a Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+Contributions and suggestions are welcome — feel free to open an issue or a pull request.
 
 ## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
-## Trademarks
-
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general). Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.
