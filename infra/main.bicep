@@ -32,6 +32,20 @@ module resources 'resources.bicep' = {
   }
 }
 
+// Grant the web app's managed identity Reader at subscription scope so it can
+// query the Azure Models API (Microsoft.CognitiveServices/locations/models/read)
+// and keep region availability fresh daily — no storage account or job needed.
+var readerRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
+
+resource webModelsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(subscription().id, environmentName, 'web-models-reader')
+  properties: {
+    roleDefinitionId: readerRoleId
+    principalId: resources.outputs.WEB_IDENTITY_PRINCIPAL_ID
+    principalType: 'ServicePrincipal'
+  }
+}
+
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = resources.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT
 output AZURE_LOCATION string = location
 output WEB_URI string = resources.outputs.WEB_URI

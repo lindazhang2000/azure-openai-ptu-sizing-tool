@@ -119,3 +119,4 @@ resource web 'Microsoft.App/containerApps@2024-03-01' = {
 
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = registry.properties.loginServer
 output WEB_URI string = 'https://${web.properties.configuration.ingress.fqdn}'
+output WEB_IDENTITY_PRINCIPAL_ID string = webIdentity.properties.principalId

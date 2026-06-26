@@ -44,8 +44,27 @@ def _fetch_region_data_from_blob(blob_url):
         return None
 
 
-# When REGION_DATA_BLOB_URL is set (e.g. on App Service), prefer the daily-refreshed
-# blob over the bundled snapshot. Falls back silently to the bundled file otherwise.
+# --- Region availability data: keep it fresh daily, everywhere -------------------
+# Primary mechanism: the app refreshes itself directly from the live Azure Models
+# API using its own managed identity, on a 24h background cycle (see region_refresh).
+# This needs no storage account, scheduled job, or GitHub dependency — a fresh
+# `azd up` in any subscription gets daily-refreshed data as long as the app's
+# identity has read access to the model catalog (Reader at subscription scope).
+#
+# Ordering: a previously-cached refresh (newer than the bundled snapshot) is applied
+# instantly for fast restarts; the background thread then keeps it current. The
+# bundled region_data.json (loaded by ptu_core at import) is the cold-start fallback.
+import region_refresh  # noqa: E402
+
+_cached_region_data = region_refresh.load_cached()
+if _cached_region_data:
+    ptu_core.set_live_region_data(_cached_region_data)
+
+region_refresh.start_background_refresh(on_update=ptu_core.set_live_region_data)
+
+# Optional legacy path: when REGION_DATA_BLOB_URL is set, also seed from a daily-
+# refreshed blob (e.g. an external Container Apps Job). Retained for backward
+# compatibility; the in-app refresh above is the recommended, portable default.
 _BLOB_URL = os.environ.get("REGION_DATA_BLOB_URL")
 if _BLOB_URL:
     _blob_data = _fetch_region_data_from_blob(_BLOB_URL)
