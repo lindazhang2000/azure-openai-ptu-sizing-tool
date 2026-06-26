@@ -24,6 +24,14 @@ env/
 # Streamlit
 .streamlit/secrets.toml
 
+# Azure Developer CLI (azd) — per-environment config, outputs, and secrets
+.azure/
+
+# Local environment variables
+.env
+.env.*
+!.env.example
+
 # Editor / OS
 .vscode/
 .idea/
