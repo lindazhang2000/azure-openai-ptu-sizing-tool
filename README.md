@@ -137,7 +137,7 @@ Plenty of community tools size PTUs, compare AI costs, or list region availabili
 | --- | --- | --- |
 | **PTU / "optimal PTU" calculator** | A PTU *quantity* for a deployment | Gives the quantity **plus the decision** — PTU vs PAYGO vs hybrid — and sizes to the **baseline**, with peak as a separate reference (avoids the "size to peak" trap). |
 | **AI cost calculator** | Cost comparison across models / configs | Compares **commitment models** (PTU vs PAYGO) with the **breakeven crossover** made explicit, not just per-model cost. |
-| **Model / region availability tool** | Region & feature coverage (often static) | **Daily-refreshed live availability** from the Azure Models API, per **model × provisioned deployment type** (Global / Data Zone / Regional), auto-updated by a Container Apps Job. *(Deployment availability, not real-time quota.)* |
+| **Model / region availability tool** | Region & feature coverage (often static) | **Daily-refreshed live availability** from the Azure Models API, per **model × provisioned deployment type** (Global / Data Zone / Regional), refreshed in-app via managed identity. *(Deployment availability, not real-time quota.)* |
 | **Copilot / product cost calculator** | Token billing for a specific product | Different scope — this is Azure OpenAI capacity planning. |
 | **Model playground** | Interactive experimentation | Unrelated — this is a sizing & architecture decision tool. |
 
