@@ -8,7 +8,7 @@ products:
 - ai-services
 urlFragment: azure-openai-ptu-sizing-tool
 name: Azure OpenAI PTU Sizing Tool
-description: An interactive Streamlit app and Jupyter notebook that estimate Azure OpenAI Provisioned Throughput Unit (PTU) needs, compare PTU vs pay-as-you-go cost, and give architecture guidance.
+description: Architecture-first PTU sizing tool for Azure OpenAI — decide PTU vs PAYGO, estimate baseline capacity, and guide production design decisions.
 ---
 
 # Azure OpenAI PTU Sizing Tool
@@ -21,25 +21,30 @@ description: An interactive Streamlit app and Jupyter notebook that estimate Azu
 
 > ⭐ If this helps you, please star the repo and share with your team.
 
-> 👉 **Bottom line:** PTU is not a pricing decision — it's an architecture decision.
+---
 
-An interactive **PTU sizing tool** for **Azure OpenAI Provisioned Throughput Units (PTU)** — a Streamlit app plus a Jupyter notebook that estimate baseline PTU needs, compare PTU vs PAYGO cost, and recommend an architecture pattern.
-
-*Based on real customer architecture patterns observed across production workloads.*
+## 🎯 Key Insight
 
 Most teams get PTU wrong — not because of sizing,
 but because they start with the wrong question.
 
-This tool solves that problem:
+❌ *"How many PTUs do I need?"*
+✅ *"Should I use PTU at all?"*
 
-👉 NOT "how many PTUs"
-👉 but "whether you should even use PTU at all"
+👉 **PTU is not a pricing decision — it's an architecture decision.**
 
-It helps you:
+---
 
-- Decide **PTU vs PAYGO vs Hybrid**
-- Avoid over-provisioning
-- Align cost with workload behavior (not guesswork)
+## 🚀 What this tool does
+
+An interactive **PTU sizing tool (Streamlit + Notebook)** that helps you:
+
+- ✅ Decide **PTU vs PAYGO vs Hybrid**
+- ✅ Estimate **baseline PTU capacity**
+- ✅ Understand **architecture tradeoffs before committing**
+- ✅ Compare **cost vs performance vs flexibility**
+
+Built from **real production patterns across enterprise workloads**.
 
 > 💡 **Key principle:**\
 > PTU should be sized for steady-state **baseline** — not peak demand.
@@ -48,11 +53,93 @@ It helps you:
 
 ![Streamlit app screenshot showing workload inputs and the recommended PTU output](docs/app-screenshot.png)
 
-> **Disclaimer:**\
-> This tool provides directional guidance only and is not an official Azure calculator.
-> Throughput, pricing, and limits may change. Always validate with Microsoft documentation before making production decisions.
->
-> **Recommended usage:** Use this tool to support **architecture discussions and initial sizing exploration**. Always validate results with the official Azure OpenAI / Microsoft Foundry PTU calculator and current pricing before any production deployment, reservation, or capacity commitment.
+---
+
+## 💡 Quick Paths (jump to what you need)
+
+- 🧠 Architecture decision → [Decision guidance](#-architecture--decision-guidance)
+- ⚙️ Running / deploying → [Getting started](#-getting-started--deployment)
+- 📊 Using real telemetry → [Token usage reporting](#token-usage-reporting)
+- 📘 Deep technical details → [Technical details](#-deep-technical-details)
+
+## 📚 Table of Contents
+
+### ✅ Basics
+- [🚀 Start here (2 minutes)](#-start-here-2-minutes)
+- [Who this is for](#who-this-is-for)
+- [When NOT to use this tool](#-when-not-to-use-this-tool)
+- [What this tool helps decide](#what-this-tool-helps-decide)
+
+### 📈 Architecture & Decision Guidance
+- [Business impact](#-business-impact)
+- [Why this vs the official Azure PTU calculator](#why-this-vs-the-official-azure-ptu-calculator)
+- [How this differs from other PTU calculators](#how-this-differs-from-other-ptu-calculators)
+- [The PTU decision triangle](#the-ptu-decision-triangle)
+- [When to use PTU vs PAYGO](#when-to-use-ptu-vs-paygo)
+- [PTU decision flow](#ptu-decision-flow)
+
+### 🧱 Getting Started & Deployment
+- [Repository layout](#repository-layout)
+- [Running the tool](#running-the-tool)
+- [Deploying to Azure App Service](#deploying-to-azure-app-service)
+- [Deploying with azd (container)](#deploying-with-azd-container-azure-container-apps)
+
+### 📊 Data & Telemetry
+- [Region data refresh architecture](#region-data-refresh-architecture)
+- [Token usage reporting](#token-usage-reporting)
+- [Auto-fill sizing inputs from usage](#optional-auto-fill-the-sizing-inputs-from-observed-usage)
+
+### 🧠 Deep Technical Details
+- [What the tool does](#what-the-tool-does)
+- [Example scenarios to try](#example-scenarios-to-try)
+- [Top PTU mistakes](#top-ptu-mistakes-this-tool-prevents)
+- [Understanding the inputs](#understanding-the-inputs)
+
+### 📘 References
+- [Official Microsoft Foundry PTU references](#official-microsoft-foundry-ptu-references)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## 🧩 Architecture-first positioning (why this matters)
+
+Most tools answer:
+
+👉 *"How many PTUs?"*
+👉 *"What does it cost?"*
+
+This tool answers the question **before both**:
+
+👉 **"Should you use PTU at all — and what architecture should wrap around it?"**
+
+That's what drives correct production decisions.
+
+---
+
+## 🧪 Example usage scenarios
+
+| Workload | Recommendation |
+| --- | --- |
+| Steady production chatbot | 🔵 PTU-first |
+| RAG / Copilot / agents | 🟢 PTU + spillover |
+| Pilot / spiky workloads | 🟠 PAYGO |
+
+> Full walkthrough with inputs and expected output: [Example scenarios to try](#example-scenarios-to-try).
+
+---
+
+## ⚠️ Disclaimer
+
+This tool provides **directional guidance only** and is not an official Azure calculator.
+
+- Not for pricing quotes
+- Not for SLA guarantees
+- Not for final capacity commitments
+
+👉 Always validate with official Microsoft documentation before production decisions.
+
+---
 
 ## 🚀 Start here (2 minutes)
 
