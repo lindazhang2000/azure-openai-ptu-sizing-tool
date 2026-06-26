@@ -122,7 +122,9 @@ The two are **complementary, not competing**. Microsoft's calculator is the auth
 | **Spillover** | Flags feasibility by deployment type (Global/Data Zone vs Regional) | Not addressed |
 | **Priority processing** | Confirmed per-model priority-tier rates as a fourth cost lane, gated by model + deployment type | Not addressed |
 | **Reservations** | 1-month / 1-year discount folded into the cost story | Not addressed |
-| **Transparency** | Open-source formulas, editable assumptions, notebook | Hosted, fixed logic |
+| **Sensitivity** | Shows how the recommendation and the PTU-vs-PAYGO call shift when RPM or tokens move ±20% | Not addressed |
+| **Shareable scenarios** | Inputs are encoded in the page URL — copy it to share or bookmark an exact scenario | Not addressed |
+| **Transparency** | Open-source formulas, editable assumptions, a read-only pricing-assumptions panel, input validation, and a notebook | Hosted, fixed logic |
 | **Pricing/throughput authority** | Directional — verify before quoting | ✅ Authoritative and current |
 
 **Use this** to decide the pattern and frame PTU-vs-PAYGO in early architecture conversations; **use Microsoft's** to lock the final, quotable numbers.

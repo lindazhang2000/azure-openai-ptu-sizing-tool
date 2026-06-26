@@ -971,6 +971,71 @@ def breakeven_series(values, points=25, rpm_max=None, ptu_tier="Monthly reservat
     }
 
 
+def sensitivity_table(values, deltas=(-0.2, -0.1, 0.1, 0.2), ptu_tier="Monthly reservation"):
+    """Show how the sizing and the PTU-vs-PAYGO decision move as demand flexes.
+
+    Estimates are only as good as their inputs, so this recomputes the headline
+    numbers while scaling the two most uncertain drivers independently:
+
+      - ``rpm``: average/peak requests per minute, and
+      - ``tokens``: input *and* output tokens per request (scaled together).
+
+    For each dimension it returns one row per delta in ``deltas`` plus a ``0.0``
+    "current" row, sorted ascending. Every row carries the recommended PTUs, the
+    PTU monthly cost at ``ptu_tier``, the PAYGO monthly cost, their signed
+    difference (``diff`` > 0 means PTU is cheaper at that point), and the
+    break-even RPM for that scenario. Pure and dependency-free for unit testing.
+
+    Returns ``{"ptu_tier", "rpm": [rows], "tokens": [rows]}`` where each row is
+    ``{"delta", "label", "recommended_ptu", "ptu_monthly", "paygo_monthly",
+    "diff", "breakeven_rpm"}``.
+    """
+    def _tier_total(calc):
+        for tier in calc.get("pricing_tiers", []):
+            if tier["term"] == ptu_tier:
+                return tier["total_monthly"]
+        return calc["ptu_monthly"]
+
+    def _label(delta):
+        if abs(delta) < 1e-9:
+            return "Current"
+        return f"{delta * 100:+.0f}%"
+
+    def _row(delta, scaled):
+        calc = calculate(scaled)
+        be = breakeven_series(scaled, ptu_tier=ptu_tier)
+        ptu_now = _tier_total(calc)
+        return {
+            "delta": delta,
+            "label": _label(delta),
+            "recommended_ptu": calc["recommended_ptu"],
+            "ptu_monthly": ptu_now,
+            "paygo_monthly": calc["paygo_monthly"],
+            "diff": calc["paygo_monthly"] - ptu_now,  # > 0 means PTU cheaper
+            "breakeven_rpm": be["breakeven_rpm"],
+        }
+
+    ordered = sorted(set(deltas) | {0.0})
+    base_rpm = float(values.get("avg_rpm", 0.0) or 0.0)
+    base_in = float(values.get("avg_input_tokens", 0.0) or 0.0)
+    base_out = float(values.get("avg_output_tokens", 0.0) or 0.0)
+
+    rpm_rows = [
+        _row(d, {**values, "avg_rpm": base_rpm * (1 + d)})
+        for d in ordered
+    ]
+    token_rows = [
+        _row(d, {
+            **values,
+            "avg_input_tokens": base_in * (1 + d),
+            "avg_output_tokens": base_out * (1 + d),
+        })
+        for d in ordered
+    ]
+
+    return {"ptu_tier": ptu_tier, "rpm": rpm_rows, "tokens": token_rows}
+
+
 def build_report_csv(values, calc, meta=None):
     """Render the sizing result as a flat ``Section,Item,Value`` CSV string.
 

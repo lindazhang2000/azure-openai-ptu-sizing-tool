@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 import ptu_core
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, PRICING_CONFIRMED_AS_OF, PRICING_SOURCE_URL, available_deployment_types, available_regions, breakeven_series, build_report_csv, build_report_html, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, spillover_supported, validate_inputs
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, PRICING_CONFIRMED_AS_OF, PRICING_SOURCE_URL, available_deployment_types, available_regions, breakeven_series, build_report_csv, build_report_html, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, sensitivity_table, spillover_supported, validate_inputs
 
 st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
 
@@ -107,6 +107,68 @@ def compute_defaults(selected_model, deployment_type, foundry_mode):
 _INITIAL_MODEL = "gpt-4.1"
 _INITIAL_DEPLOYMENT = available_deployment_types(MODEL_PRESETS.get(_INITIAL_MODEL, {}), _INITIAL_MODEL)[0]
 
+# Inputs that round-trip through the page URL so a sizing scenario can be shared
+# or bookmarked. Controls and the foundry toggle are always encoded; numeric
+# inputs are only encoded when they differ from the model/deployment default, to
+# keep a pristine link short.
+_SHARE_STR_KEYS = ("selected_model", "deployment_type", "region")
+_SHARE_FLOAT_KEYS = (
+    "avg_rpm", "avg_input_tokens", "avg_output_tokens", "p95_multiplier",
+    "peak_minutes_fraction", "cache_rate", "baseline_load_factor", "safety_buffer",
+    "hours_per_month", "reservation_discount_monthly", "reservation_discount_yearly",
+    "model_tpm_per_ptu", "output_weight", "min_ptu_commit", "ptu_scale_increment",
+    "ptu_hourly_price", "paygo_input_per_1m", "paygo_cached_per_1m", "paygo_output_per_1m",
+    "priority_input_per_1m", "priority_cached_per_1m", "priority_output_per_1m",
+)
+
+
+def _hydrate_from_query_params():
+    """Seed session state from a shared URL (validated), run once at first load."""
+    qp = st.query_params
+    valid_models = ["Custom"] + list(MODEL_PRESETS.keys())
+    model = qp.get("selected_model")
+    if model in valid_models:
+        st.session_state["selected_model"] = model
+    cur_model = st.session_state["selected_model"]
+    preset = MODEL_PRESETS.get(cur_model, {})
+    dep = qp.get("deployment_type")
+    if dep in available_deployment_types(preset, cur_model):
+        st.session_state["deployment_type"] = dep
+    reg = qp.get("region")
+    if reg and reg in available_regions(cur_model, st.session_state["deployment_type"]):
+        st.session_state["region"] = reg
+    fm = qp.get("foundry_mode")
+    if fm is not None:
+        st.session_state["foundry_mode"] = str(fm).lower() in ("1", "true", "yes")
+    for _k in _SHARE_FLOAT_KEYS:
+        raw = qp.get(_k)
+        if raw is None:
+            continue
+        try:
+            st.session_state[_k] = float(raw)
+        except (TypeError, ValueError):
+            pass
+
+
+def _sync_query_params():
+    """Mirror the current inputs into the URL so it stays shareable/bookmarkable."""
+    defaults = compute_defaults(
+        st.session_state["selected_model"],
+        st.session_state["deployment_type"],
+        st.session_state["foundry_mode"],
+    )
+    params = {k: str(st.session_state[k]) for k in _SHARE_STR_KEYS}
+    if st.session_state["foundry_mode"]:
+        params["foundry_mode"] = "1"
+    for _k in _SHARE_FLOAT_KEYS:
+        value = float(st.session_state.get(_k, defaults.get(_k, 0.0)))
+        default = float(defaults.get(_k, value))
+        if abs(value - default) > 1e-9:
+            params[_k] = format(value, ".6g")
+    st.query_params.clear()
+    st.query_params.update(params)
+
+
 if "_prev_controls" not in st.session_state:
     for _k, _v in compute_defaults(_INITIAL_MODEL, _INITIAL_DEPLOYMENT, False).items():
         st.session_state.setdefault(_k, _v)
@@ -114,7 +176,12 @@ if "_prev_controls" not in st.session_state:
     st.session_state.setdefault("deployment_type", _INITIAL_DEPLOYMENT)
     st.session_state.setdefault("region", available_regions(_INITIAL_MODEL, _INITIAL_DEPLOYMENT)[0])
     st.session_state.setdefault("foundry_mode", False)
-    st.session_state["_prev_controls"] = (_INITIAL_MODEL, _INITIAL_DEPLOYMENT, False)
+    _hydrate_from_query_params()
+    st.session_state["_prev_controls"] = (
+        st.session_state["selected_model"],
+        st.session_state["deployment_type"],
+        st.session_state["foundry_mode"],
+    )
 
 
 def _reset_defaults():
@@ -142,6 +209,7 @@ with st.sidebar:
     st.header("Quick actions")
     st.button("Reset to default assumptions", on_click=_reset_defaults)
     st.button("Show getting-started guide", on_click=_show_tour)
+    st.markdown("**🔗 Shareable link**  \nThis page's URL updates as you edit. Copy it from the address bar to share or bookmark this exact scenario.")
     st.markdown("**Note**  \nThis tool provides **illustrative and directional guidance only** and is **not an official Azure PTU calculator**. Throughput assumptions, minimum PTU commitments, and pricing are subject to change. Always verify against current Azure documentation before making customer-specific decisions.")
 
 # First-run guided tour — shown expanded on the first visit and dismissible. The
@@ -358,6 +426,9 @@ calc = calculate(values)
 # implausibly large requests) so the numbers below are not silently misleading.
 for _issue in validate_inputs(values, foundry_mode):
     (st.warning if _issue["level"] == "warning" else st.info)(_issue["message"])
+
+# Keep the URL in sync with the current inputs so the page is shareable.
+_sync_query_params()
 
 with right:
     st.subheader("Outputs")
@@ -581,6 +652,41 @@ if _be["rows"]:
             f"Across the charted range PAYGO stays cheaper on price than the **{_be_tier}** PTU baseline (green band) — this workload sits below the PTU cost break-even. "
             f"Current load: {_be['current_rpm']:,.0f} RPM (grey dashed). PTU can still be worth it for guaranteed throughput, steady latency, and no 429 throttling{_cheaper_hint}."
         )
+
+# Sensitivity: estimates are only as good as their inputs, so show how the
+# recommendation and the PTU-vs-PAYGO decision move when demand flexes ±20%.
+with st.expander("Sensitivity — how the answer moves if your estimate is off (±20%)", expanded=False):
+    _sens = sensitivity_table(values, ptu_tier=_be_tier)
+
+    def _verdict_cell(row):
+        d = row["diff"]
+        return f"PTU −${d:,.0f}" if d > 0 else f"PAYGO −${-d:,.0f}"
+
+    def _sens_df(rows):
+        return pd.DataFrame([
+            {
+                "Change": r["label"],
+                "Recommended PTUs": f'{r["recommended_ptu"]:,.0f}',
+                "PTU $/mo": f'${r["ptu_monthly"]:,.0f}',
+                "PAYGO $/mo": f'${r["paygo_monthly"]:,.0f}',
+                "Cheaper lane": _verdict_cell(r),
+                "Break-even RPM": (f'{r["breakeven_rpm"]:,.0f}' if r["breakeven_rpm"] else "—"),
+            }
+            for r in rows
+        ])
+
+    st.caption(
+        f"PTU lane uses the **{_be_tier}** tier (matches the break-even chart above). "
+        "“Cheaper lane” shows which option wins and by how much per month at each scenario; "
+        "“Break-even RPM” is where PTU overtakes PAYGO (— means no crossover in range)."
+    )
+    _s1, _s2 = st.columns(2)
+    with _s1:
+        st.markdown("**If request rate (RPM) is off**")
+        st.dataframe(_sens_df(_sens["rpm"]), hide_index=True, width="stretch")
+    with _s2:
+        st.markdown("**If tokens per request are off**")
+        st.dataframe(_sens_df(_sens["tokens"]), hide_index=True, width="stretch")
 
 # One-click shareable report — a self-contained HTML file stakeholders can open
 # in any browser and "Save as PDF". Built from the same inputs/result as the page.

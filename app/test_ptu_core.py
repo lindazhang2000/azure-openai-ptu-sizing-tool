@@ -764,3 +764,43 @@ def test_validate_inputs_flags_underprovisioned_baseline_without_spillover():
     assert any(i["level"] == "info" and "spillover" in i["message"].lower() for i in issues)
 
 
+def test_sensitivity_table_has_rpm_and_token_dimensions():
+    sens = ptu_core.sensitivity_table(dict(DEFAULTS))
+    assert set(sens) == {"ptu_tier", "rpm", "tokens"}
+    # Four deltas plus the injected 0.0 "current" row.
+    assert len(sens["rpm"]) == 5
+    assert len(sens["tokens"]) == 5
+
+
+def test_sensitivity_table_includes_current_row_matching_base():
+    values = dict(DEFAULTS)
+    sens = ptu_core.sensitivity_table(values, ptu_tier="Monthly reservation")
+    base = calculate(values)
+    current = next(r for r in sens["rpm"] if r["label"] == "Current")
+    assert current["delta"] == 0.0
+    assert current["recommended_ptu"] == base["recommended_ptu"]
+    assert current["paygo_monthly"] == pytest.approx(base["paygo_monthly"])
+
+
+def test_sensitivity_table_rows_sorted_and_rpm_scales_paygo():
+    sens = ptu_core.sensitivity_table(dict(DEFAULTS))
+    deltas = [r["delta"] for r in sens["rpm"]]
+    assert deltas == sorted(deltas)
+    # PAYGO cost is linear in request rate, so it rises monotonically with RPM.
+    paygo = [r["paygo_monthly"] for r in sens["rpm"]]
+    assert paygo == sorted(paygo)
+    assert paygo[0] < paygo[-1]
+
+
+def test_sensitivity_table_respects_ptu_tier():
+    values = dict(DEFAULTS)
+    monthly = ptu_core.sensitivity_table(values, ptu_tier="Monthly reservation")
+    yearly = ptu_core.sensitivity_table(values, ptu_tier="Yearly reservation")
+    assert yearly["ptu_tier"] == "Yearly reservation"
+    m_current = next(r for r in monthly["rpm"] if r["label"] == "Current")
+    y_current = next(r for r in yearly["rpm"] if r["label"] == "Current")
+    # The yearly reservation is the deeper discount, so its PTU lane is cheaper.
+    assert y_current["ptu_monthly"] < m_current["ptu_monthly"]
+
+
+
