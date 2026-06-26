@@ -183,7 +183,7 @@ flowchart TD
 | Path | Contents |
 | --- | --- |
 | [app/](app) | The PTU sizing tool. `ptu_core.py` (sizing engine), `ptu_streamlit_app.py` (Streamlit UI), `PTU_Sizing_Notebook.ipynb` (notebook), `test_ptu_core.py` (tests), the bundled `region_data.json` snapshot, plus the app `README.md` and `requirements.txt`. |
-| [scripts/](scripts) | Operations and demo tooling. `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` + `region-refresh-job.yaml` (regenerate region availability via the Azure Models API / daily Container Apps Job), `token_usage.py` (per-deployment / per-model token usage across a subscription, with a `--demo` synthetic mode), `token_usage_kql.py` (the same report shape from a Log Analytics workspace via KQL), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), `demo_play.ps1` / `demo_play.sh` (self-running narrated demo playback; add `-Short`/`--short` for a teaser), and `test_token_usage.py` / `test_usage_to_sizing.py` (tests). |
+| [scripts/](scripts) | Operations and demo tooling. `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` (regenerate the bundled `region_data.json` snapshot via the Azure Models API), `token_usage.py` (per-deployment / per-model token usage across a subscription, with a `--demo` synthetic mode), `token_usage_kql.py` (the same report shape from a Log Analytics workspace via KQL), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), `demo_play.ps1` / `demo_play.sh` (self-running narrated demo playback; add `-Short`/`--short` for a teaser), and `test_token_usage.py` / `test_usage_to_sizing.py` (tests). |
 | [docs/](docs) | Supporting assets: `app-screenshot.png`, `PTU_decision_triangle.png`, `demo-script.md` (timed demo narration / recording guide), and the architecture-first capacity-planning whitepaper behind this tool (`Architecture_Driven_Capacity_Planning_Whitepaper.html` and `.docx`). |
 | [linkedin/](linkedin) | `ptu_post.md` — a ready-to-share LinkedIn post about the tool. |
 | [infra/](infra) | Bicep for the `azd` container deploy: `main.bicep` (subscription-scope entry point), `resources.bicep` (Container Registry, Container Apps environment + app, managed identity, Log Analytics), and `main.parameters.json`. |
@@ -251,41 +251,33 @@ docker run --rm -p 8501:8501 ptu-sizing-tool
 
 
 The **Region** dropdown is backed by `region_data.json`, which is kept current
-automatically — no redeploy needed. A scheduled **Azure Container Apps Job**
-regenerates the data daily and publishes it to **Blob Storage**, and the app reads
-it at runtime. All access is **Microsoft Entra ID (managed identity)** — the storage
-account disables shared-key and public access, so no secrets or SAS are involved.
+automatically — no scheduled job, storage account, or redeploy needed. The app
+**refreshes itself**: on startup, and then every 24 hours on a background thread, it
+queries the live **Azure Models API** directly using its own **managed identity** and
+swaps the data in-process. All access is **Microsoft Entra ID (managed identity)** —
+no secrets, SAS, or keys are involved.
 
 ```mermaid
 flowchart LR
-    subgraph Daily["Container Apps Job — daily 06:00 UTC"]
-        J["ptu-region-refresh<br/>(system-assigned MI)"]
+    subgraph App["Streamlit app (managed identity)"]
+        R["region_refresh<br/>24h background thread"]
     end
-    M["Azure Models API<br/>(az cognitiveservices model list)"]
-    B[("Blob Storage<br/>region-data/region_data.json")]
-    A["App Service<br/>Streamlit app (system-assigned MI)"]
-    F["Bundled region_data.json<br/>(fallback)"]
+    M["Azure Models API<br/>(ARM model catalog)"]
+    C[("Disk cache<br/>REGION_DATA_CACHE_PATH")]
+    F["Bundled region_data.json<br/>(cold-start fallback)"]
 
-    J -- "Reader (subscription)" --> M
-    J -- "Storage Blob Data Contributor" --> B
-    A -- "Storage Blob Data Reader, cached 1h" --> B
-    B -. "if blob unreachable" .-> F
-    F -.-> A
+    R -- "Reader (subscription)" --> M
+    R -- "write / read warm start" --> C
+    F -. "until first refresh" .-> R
 ```
 
 | Concern | Detail |
 | --- | --- |
-| **Schedule** | Daily at 06:00 UTC (cron `0 6 * * *`), defined in [scripts/region-refresh-job.yaml](scripts/region-refresh-job.yaml). |
-| **Write path** | The job authenticates with its managed identity, runs [scripts/refresh_regions.py](scripts/refresh_regions.py), and uploads the result to the `region-data` container. |
-| **Read path** | The app fetches the blob via `DefaultAzureCredential` when the `REGION_DATA_BLOB_URL` app setting is present (cached one hour), falling back to the snapshot bundled in `app/`. |
-| **Auth** | Entra ID / managed identity only. Job MI needs **Reader** (subscription) + **Storage Blob Data Contributor**; app MI needs **Storage Blob Data Reader**. |
-
-Update or trigger the job on demand:
-
-```bash
-az containerapp job update -n ptu-region-refresh -g ptu-sizing-rg --yaml scripts/region-refresh-job.yaml
-az containerapp job start  -n ptu-region-refresh -g ptu-sizing-rg
-```
+| **Schedule** | On startup, then every 24h on a background thread (retries hourly on failure). No external scheduler. |
+| **Refresh path** | The app authenticates with its managed identity and queries the Azure Models API directly (see [app/region_refresh.py](app/region_refresh.py)), updating the live data in-process. |
+| **Cache** | A refreshed copy is written to `REGION_DATA_CACHE_PATH` (default: system temp dir) for fast warm starts; point it at a persisted path like `/home/data/ptu_region_data_cache.json` on App Service to survive restarts. |
+| **Fallback** | The snapshot bundled in [app/region_data.json](app/region_data.json) (regenerated by [scripts/refresh_regions.py](scripts/refresh_regions.py)) seeds cold starts until the first live refresh completes. |
+| **Auth** | Entra ID / managed identity only. The app's identity needs **Reader** at subscription scope to list models across regions. |
 
 ## Token usage reporting
 

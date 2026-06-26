@@ -33,32 +33,21 @@ For a full walkthrough of every input, the sizing formulas, example scenarios, a
 
 ## Refreshing region availability
 
-Region availability is read from `region_data.json`. The deployed app loads it in
-this order of preference:
+Region availability is read from `region_data.json`. The deployed app keeps it
+current automatically — no storage account, scheduled job, or redeploy required:
 
-1. **Azure Blob Storage** — when the `REGION_DATA_BLOB_URL` app setting is set, the
-   app fetches the blob at startup using its **managed identity** (cached for one
-   hour). This blob is refreshed automatically every day (see below).
+1. **In-app daily refresh** — on startup the app queries the live **Azure Models
+   API** directly using its **managed identity**, then refreshes again every 24h on
+   a background thread (see [`region_refresh.py`](region_refresh.py)). This needs
+   only **Reader** at subscription scope on the app's identity; a fresh `azd up` in
+   any subscription gets daily-refreshed data with no extra wiring.
 2. **Bundled snapshot** — the `region_data.json` committed in this folder, used as a
-   fallback whenever the blob is unreachable or the env var is unset.
+   cold-start fallback until the first live refresh completes.
 
-The public app never uses secrets — both the daily job (write) and the app (read)
-authenticate with Azure AD via managed identity, because the storage account has
-shared-key and public access disabled.
-
-### Automated daily refresh (Azure Container Apps Job)
-
-An Azure Container Apps Job (`ptu-region-refresh`) runs daily at 06:00 UTC. It
-clones this repo, runs [`scripts/refresh_regions.py`](../scripts/refresh_regions.py),
-and uploads the result to the `region-data` blob container. The job definition lives
-in [`scripts/region-refresh-job.yaml`](../scripts/region-refresh-job.yaml). Create or
-update it with:
-
-```bash
-az containerapp job create -n ptu-region-refresh -g ptu-sizing-rg \
-  --yaml scripts/region-refresh-job.yaml
-az containerapp job start -n ptu-region-refresh -g ptu-sizing-rg   # run on demand
-```
+The app never uses secrets — it authenticates with Microsoft Entra ID via managed
+identity. A refreshed copy is cached to disk (`REGION_DATA_CACHE_PATH`, default the
+system temp dir) for fast warm starts; point it at a persisted path such as
+`/home/data/ptu_region_data_cache.json` on App Service to survive restarts.
 
 ### Regenerating locally (optional)
 

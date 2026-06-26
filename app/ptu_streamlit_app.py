@@ -1,6 +1,4 @@
 import datetime
-import json
-import os
 
 import altair as alt
 import pandas as pd
@@ -25,25 +23,6 @@ def _region_data_age_days(generated_utc):
     return (datetime.datetime.now(datetime.timezone.utc) - ts).days
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _fetch_region_data_from_blob(blob_url):
-    """Fetch region_data.json from Azure Blob Storage via managed identity / AAD.
-
-    Returns the parsed dict, or ``None`` on any failure so the app falls back to
-    the bundled ``region_data.json``. Cached for one hour to avoid repeated calls.
-    """
-    try:
-        from azure.identity import DefaultAzureCredential
-        from azure.storage.blob import BlobClient
-
-        credential = DefaultAzureCredential()
-        client = BlobClient.from_blob_url(blob_url, credential=credential)
-        raw = client.download_blob().readall()
-        return json.loads(raw)
-    except Exception:
-        return None
-
-
 # --- Region availability data: keep it fresh daily, everywhere -------------------
 # Primary mechanism: the app refreshes itself directly from the live Azure Models
 # API using its own managed identity, on a 24h background cycle (see region_refresh).
@@ -61,15 +40,6 @@ if _cached_region_data:
     ptu_core.set_live_region_data(_cached_region_data)
 
 region_refresh.start_background_refresh(on_update=ptu_core.set_live_region_data)
-
-# Optional legacy path: when REGION_DATA_BLOB_URL is set, also seed from a daily-
-# refreshed blob (e.g. an external Container Apps Job). Retained for backward
-# compatibility; the in-app refresh above is the recommended, portable default.
-_BLOB_URL = os.environ.get("REGION_DATA_BLOB_URL")
-if _BLOB_URL:
-    _blob_data = _fetch_region_data_from_blob(_BLOB_URL)
-    if _blob_data:
-        ptu_core.set_live_region_data(_blob_data)
 
 st.title("Azure OpenAI PTU Sizing & Architecture Guidance Tool")
 st.caption("Indicative workshop tool for PTU discovery, cost comparison, and architecture recommendations.")
