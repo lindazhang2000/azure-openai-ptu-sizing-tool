@@ -599,12 +599,16 @@ if _be["rows"]:
 
     be_lines = (
         alt.Chart(be_df)
-        .mark_line()
+        .mark_line(point=alt.OverlayMarkDef(size=45))
         .encode(
             x=alt.X("RPM:Q", title=_rpm_label),
             y=alt.Y("Monthly $:Q", title="Monthly cost (USD)"),
             color=alt.Color("Lane:N", title=None),
-            tooltip=[alt.Tooltip("RPM:Q", format=",.0f"), "Lane", alt.Tooltip("Monthly $:Q", format=",.0f")],
+            tooltip=[
+                alt.Tooltip("Lane:N", title="Lane"),
+                alt.Tooltip("RPM:Q", title="RPM", format=",.0f"),
+                alt.Tooltip("Monthly $:Q", title="Monthly cost (USD)", format="$,.0f"),
+            ],
         )
     )
     be_layers.append(be_lines)
