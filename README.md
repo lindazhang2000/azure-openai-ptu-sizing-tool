@@ -186,7 +186,8 @@ flowchart TD
 | [scripts/](scripts) | Operations and demo tooling. `deploy-appservice.ps1` (App Service deploy), `refresh_regions.py` + `region-refresh-job.yaml` (regenerate region availability via the Azure Models API / daily Container Apps Job), `token_usage.py` (per-deployment / per-model token usage across a subscription, with a `--demo` synthetic mode), `token_usage_kql.py` (the same report shape from a Log Analytics workspace via KQL), `usage_to_sizing.py` (optional bridge that turns observed usage into sizing-tool inputs), `demo_play.ps1` / `demo_play.sh` (self-running narrated demo playback; add `-Short`/`--short` for a teaser), and `test_token_usage.py` / `test_usage_to_sizing.py` (tests). |
 | [docs/](docs) | Supporting assets: `app-screenshot.png`, `PTU_decision_triangle.png`, `demo-script.md` (timed demo narration / recording guide), and the architecture-first capacity-planning whitepaper behind this tool (`Architecture_Driven_Capacity_Planning_Whitepaper.html` and `.docx`). |
 | [linkedin/](linkedin) | `ptu_post.md` — a ready-to-share LinkedIn post about the tool. |
-| Root | `README.md`, `requirements.txt` (deploy/runtime deps for App Service; the `app/` copy adds `pytest` for local dev + tests), `pyproject.toml` (packaging + pytest config), and `LICENSE`. |
+| [infra/](infra) | Bicep for the `azd` container deploy: `main.bicep` (subscription-scope entry point), `resources.bicep` (Container Registry, Container Apps environment + app, managed identity, Log Analytics), and `main.parameters.json`. |
+| Root | `README.md`, `requirements.txt` (deploy/runtime deps for App Service; the `app/` copy adds `pytest` for local dev + tests), `pyproject.toml` (packaging + pytest config), `Dockerfile` + `.dockerignore` + `azure.yaml` (container / `azd up` deploy), and `LICENSE`. |
 
 ## Running the tool
 
@@ -222,7 +223,32 @@ App Service via Oryx build. Requires an active `az login` session and the Azure 
 Run it from the repository root. See the script header for all parameters
 (`-ResourceGroup`, `-AppName`, `-PlanName`, `-Location`, `-Provision`).
 
+## Deploying with `azd` (container, Azure Container Apps)
+
+For a containerized deploy, the repo ships a `Dockerfile`, `azure.yaml`, and
+Bicep infra under [infra/](infra) targeting **Azure Container Apps**. With the
+[Azure Developer CLI](https://aka.ms/azd) installed and an active `az login`:
+
+```bash
+azd up
+```
+
+`azd up` provisions a resource group, Azure Container Registry, Container Apps
+environment, and a Container App (pull via user-assigned managed identity — no
+registry admin credentials), builds the image from the `Dockerfile`, and prints
+the public URL. Use `azd deploy` to ship code-only changes and `azd down` to
+tear everything down.
+
+To build and run the same image locally:
+
+```bash
+docker build -t ptu-sizing-tool .
+docker run --rm -p 8501:8501 ptu-sizing-tool
+# open http://localhost:8501
+```
+
 ## Region data refresh architecture
+
 
 The **Region** dropdown is backed by `region_data.json`, which is kept current
 automatically — no redeploy needed. A scheduled **Azure Container Apps Job**

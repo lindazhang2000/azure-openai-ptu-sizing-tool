@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 
@@ -9,6 +10,19 @@ import ptu_core
 from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, PRICING_CONFIRMED_AS_OF, PRICING_SOURCE_URL, available_deployment_types, available_regions, breakeven_series, build_report_csv, build_report_html, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, sensitivity_table, spillover_supported, validate_inputs
 
 st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
+
+
+def _region_data_age_days(generated_utc):
+    """Whole days between the region snapshot's generated_utc and now, or None."""
+    if not generated_utc:
+        return None
+    try:
+        ts = datetime.datetime.fromisoformat(str(generated_utc).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=datetime.timezone.utc)
+    return (datetime.datetime.now(datetime.timezone.utc) - ts).days
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -270,10 +284,15 @@ with left:
     )
     if _region_src == "live":
         _asof = (_region_asof or "")[:10]
+        _age_days = _region_data_age_days(_region_asof)
+        _stale_note = (
+            f" ⚠️ This snapshot is {_age_days} days old — re-run `scripts/refresh_regions.py` and commit the updated region_data.json."
+            if _age_days is not None and _age_days > 30 else ""
+        )
         if region_options:
-            st.caption(f"✅ {len(region_options)} region(s) for {selected_model} · {deployment_type} — live from Azure Models API (refreshed {_asof}).")
+            st.caption(f"✅ {len(region_options)} region(s) for {selected_model} · {deployment_type} — live from Azure Models API (refreshed {_asof}).{_stale_note}")
         else:
-            st.caption(f"⚠️ {selected_model} · {deployment_type} not offered per the Azure Models API (refreshed {_asof}). Try another deployment type or region.")
+            st.caption(f"⚠️ {selected_model} · {deployment_type} not offered per the Azure Models API (refreshed {_asof}). Try another deployment type or region.{_stale_note}")
     else:
         if region_options:
             st.caption(f"{len(region_options)} indicative region(s) for {selected_model} · {deployment_type}. Verify against the live region tables before deployment.")

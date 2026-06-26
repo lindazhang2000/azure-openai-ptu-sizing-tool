@@ -1,0 +1,15 @@
+.git
+.github
+.azure
+.venv*
+**/__pycache__/
+**/*.pyc
+**/*.egg-info
+.pytest_cache
+docs
+linkedin
+scripts
+infra
+*.ipynb
+Untitled-*.ipynb
+README.md
