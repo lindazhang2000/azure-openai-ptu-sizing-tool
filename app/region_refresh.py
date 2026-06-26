@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -28,6 +29,9 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+_log = logging.getLogger("region_refresh")
+_log.addHandler(logging.NullHandler())
 
 # Azure provisioned SKU name -> the deployment-type label used throughout the app.
 # Plain "Provisioned" is the legacy SKU and is intentionally ignored. Kept in sync
@@ -154,10 +158,12 @@ def fetch_region_data(workers: int = 10) -> dict | None:
 
         subscription_id = _resolve_subscription_id(token)
         if not subscription_id:
+            _log.warning("region refresh: no accessible subscription for this identity")
             return None
 
         regions = _list_physical_regions(subscription_id, token)
         if not regions:
+            _log.warning("region refresh: no physical regions returned for subscription")
             return None
 
         models: dict[str, dict[str, set]] = {}
@@ -171,19 +177,26 @@ def fetch_region_data(workers: int = 10) -> dict | None:
                     models.setdefault(preset, {}).setdefault(dep, set()).add(_region)
 
         if not models:
+            _log.warning("region refresh: Models API returned no provisioned SKUs")
             return None
 
         serialised = {
             preset: {dep: sorted(regs) for dep, regs in sorted(types.items())}
             for preset, types in sorted(models.items())
         }
+        _log.info(
+            "region refresh: built payload with %d models across %d regions",
+            len(serialised),
+            len(regions),
+        )
         return {
             "generated_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
             "source": "Azure Models API (in-app refresh)",
             "deployment_type_skus": _SKU_TO_DEPLOYMENT_TYPE,
             "models": serialised,
         }
-    except Exception:
+    except Exception as exc:
+        _log.warning("region refresh: failed to query Azure Models API: %s", exc)
         return None
 
 
@@ -219,10 +232,13 @@ def _save_cache(payload: dict, cache_path: str | None = None) -> None:
     """Persist a refresh payload to disk so quick restarts skip a re-query."""
     path = cache_path or _DEFAULT_CACHE_PATH
     try:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(payload, fh)
-    except OSError:
-        pass
+    except OSError as exc:
+        _log.warning("region refresh: could not write cache to %s: %s", path, exc)
 
 
 def _refresh_loop(on_update, max_age_hours: float, retry_minutes: float, cache_path: str | None) -> None:
@@ -240,6 +256,10 @@ def _refresh_loop(on_update, max_age_hours: float, retry_minutes: float, cache_p
             _save_cache(payload, cache_path)
             time.sleep(max_age_hours * 3600.0)
         else:
+            _log.warning(
+                "region refresh: update failed; keeping current data, retry in %.0f min",
+                retry_minutes,
+            )
             time.sleep(retry_minutes * 60.0)
 
 
