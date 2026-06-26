@@ -583,18 +583,18 @@ if _be["rows"]:
         be_layers.append(
             alt.Chart(pd.DataFrame({"x0": [0.0], "x1": [_be["breakeven_rpm"]]}))
             .mark_rect(color="#2e7d32", opacity=0.07)
-            .encode(x=alt.X("x0:Q", axis=None), x2="x1:Q")
+            .encode(x=alt.X("x0:Q", axis=None), x2="x1:Q", tooltip=alt.value(None))
         )
         be_layers.append(
             alt.Chart(pd.DataFrame({"x0": [_be["breakeven_rpm"]], "x1": [_rpm_top]}))
             .mark_rect(color="#0a6ed1", opacity=0.07)
-            .encode(x=alt.X("x0:Q", axis=None), x2="x1:Q")
+            .encode(x=alt.X("x0:Q", axis=None), x2="x1:Q", tooltip=alt.value(None))
         )
     else:
         be_layers.append(
             alt.Chart(pd.DataFrame({"x0": [0.0], "x1": [_rpm_top]}))
             .mark_rect(color="#2e7d32", opacity=0.06)
-            .encode(x=alt.X("x0:Q", axis=None), x2="x1:Q")
+            .encode(x=alt.X("x0:Q", axis=None), x2="x1:Q", tooltip=alt.value(None))
         )
 
     be_lines = (
