@@ -82,10 +82,13 @@ try {
     New-Item -ItemType Directory $tmp | Out-Null
 
     # Local-only or non-runtime folders that should not ship to App Service.
-    $exclude = @('.git', '.venv', '.venv-1', '_deploy_pkg', 'deploy.zip',
-                 'docs', 'linkedin', '.github', '.playwright-mcp')
+    # Any folder named like a virtual env (.venv, .venv-1, .venv-2, ...) is skipped.
+    $exclude = @('.git', '_deploy_pkg', 'deploy.zip', 'docs', 'linkedin',
+                 '.github', '.playwright-mcp', '.azure', '.pytest_cache')
 
-    Get-ChildItem -Force | Where-Object { $exclude -notcontains $_.Name } | ForEach-Object {
+    Get-ChildItem -Force | Where-Object {
+        $exclude -notcontains $_.Name -and $_.Name -notlike '.venv*'
+    } | ForEach-Object {
         Copy-Item $_.FullName -Destination $tmp -Recurse -Force
     }
     Get-ChildItem $tmp -Recurse -Filter '__pycache__' |
