@@ -14,6 +14,7 @@ __pycache__/
 build/
 dist/
 .venv/
+.venv-2/
 venv/
 env/
 .python-version
@@ -41,6 +42,15 @@ desktop.ini
 
 # Local-only authoring scratch (not part of the published sample)
 linkedin/
+
+# Local-only docs (kept out of the published repo by request)
+docs/ptu-reservation-and-spillover-faq.html
+docs/ptu-reservation-and-spillover-faq.md
+docs/spillover-terraform-example.md
+
+# Local-only scratch files (not part of the published sample)
+README - Copy.md
+Untitled-2.ipynb
 
 # Playwright MCP scratch output
 .playwright-mcp/
