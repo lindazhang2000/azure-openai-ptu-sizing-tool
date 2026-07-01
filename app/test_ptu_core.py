@@ -13,14 +13,18 @@ from ptu_core import (
     available_deployment_types,
     available_regions,
     calculate,
+    catalog_model_names,
     deployment_hourly_price,
     deployment_minimums,
+    has_preset,
     paygo_multiplier,
     paygo_rates,
     model_supports_priority,
+    pricing_data_source,
     priority_rates,
     priority_supported,
     region_supported,
+    set_pricing_overlay,
     spillover_supported,
 )
 from ptu_core import find_model_preset, suggest_ptu_for_throughput
@@ -467,6 +471,97 @@ def test_paygo_multiplier_by_deployment_type():
     assert paygo_multiplier("Regional") == 1.10
     # Unknown/Custom type falls back to the base multiplier.
     assert paygo_multiplier("Custom") == 1.0
+
+
+# --- Newly curated presets, live catalog, and pricing overlay -----------------
+
+# A sample of models added from the live Azure catalog with confirmed sizing.
+_NEW_PRESETS = ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-4o-mini", "o4-mini", "o3", "o3-mini", "o1", "DeepSeek-R1", "DeepSeek-V3.2"]
+
+
+@pytest.mark.parametrize("name", _NEW_PRESETS)
+def test_new_preset_is_well_formed(name):
+    preset = MODEL_PRESETS[name]
+    # Required sizing fields present and sane.
+    assert preset["model_tpm_per_ptu"] > 0
+    assert preset["output_weight"] > 0
+    assert preset["min_ptu_commit"] > 0
+    assert preset["ptu_scale_increment"] > 0
+    # Confirmed Global Standard PAYGO rates present and ordered (output >= input).
+    assert preset["paygo_input_per_1m"] > 0
+    assert preset["paygo_output_per_1m"] >= preset["paygo_input_per_1m"]
+    # At least one valid deployment type.
+    types = available_deployment_types(preset)
+    assert types and all(t in DEPLOYMENT_TYPES for t in types)
+
+
+@pytest.mark.parametrize("name", _NEW_PRESETS)
+def test_new_preset_sizes_to_a_valid_ptu(name):
+    preset = MODEL_PRESETS[name]
+    workload = {"avg_rpm": 100, "avg_input_tokens": 1500, "avg_output_tokens": 500}
+    r = calculate({**DEFAULTS, **preset, **workload})
+    # Recommendation is at least the model minimum and on the scale increment.
+    assert r["recommended_ptu"] >= preset["min_ptu_commit"]
+    assert r["recommended_ptu"] % preset["ptu_scale_increment"] == 0
+
+
+def test_has_preset_distinguishes_curated_from_unknown():
+    assert has_preset("gpt-4.1") is True
+    assert has_preset("o4-mini") is True
+    assert has_preset("not-a-real-model") is False
+
+
+def test_catalog_model_names_reflects_live_data(monkeypatch):
+    # Without live region data, no catalog is exposed.
+    monkeypatch.setattr(ptu_core, "_LIVE_REGION_DATA", None)
+    assert catalog_model_names() == []
+    # With live data, all catalog models are listed (including preset-less ones).
+    fake = {"generated_utc": "x", "models": {"gpt-4.1": {"Global": ["eastus2"]}, "brand-new-model": {"Global": ["eastus2"]}}}
+    monkeypatch.setattr(ptu_core, "_LIVE_REGION_DATA", fake)
+    names = catalog_model_names()
+    assert "brand-new-model" in names
+    assert not has_preset("brand-new-model")  # catalog-only, no curated economics
+
+
+@pytest.fixture
+def restore_pricing():
+    """Re-apply the committed pricing overlay after a test mutates it."""
+    yield
+    ptu_core._apply_pricing_overlay(ptu_core._load_pricing_overlay())
+
+
+def test_pricing_overlay_applies_valid_and_ignores_bad_values(restore_pricing):
+    original = MODEL_PRESETS["gpt-4.1"]["paygo_output_per_1m"]
+    ok = set_pricing_overlay({
+        "generated_utc": "2099-01-01",
+        "models": {"gpt-4.1": {
+            "paygo_output_per_1m": 42.0,   # valid -> applied
+            "paygo_input_per_1m": -1,       # negative -> ignored
+            "paygo_cached_per_1m": "free",  # non-numeric -> ignored
+        }},
+    })
+    assert ok is True
+    assert MODEL_PRESETS["gpt-4.1"]["paygo_output_per_1m"] == 42.0
+    assert MODEL_PRESETS["gpt-4.1"]["paygo_input_per_1m"] == 2.0     # unchanged
+    assert MODEL_PRESETS["gpt-4.1"]["paygo_cached_per_1m"] == 0.5    # unchanged
+    assert pricing_data_source() == ("live", "2099-01-01")
+    assert original == 8.0
+
+
+def test_pricing_overlay_revert_restores_static(restore_pricing):
+    set_pricing_overlay({"models": {"gpt-4.1": {"paygo_output_per_1m": 999.0}}, "generated_utc": "x"})
+    assert MODEL_PRESETS["gpt-4.1"]["paygo_output_per_1m"] == 999.0
+    # Passing None reverts to the built-in fallback pricing.
+    assert set_pricing_overlay(None) is False
+    assert MODEL_PRESETS["gpt-4.1"]["paygo_output_per_1m"] == 8.0
+    assert pricing_data_source() == ("static", None)
+
+
+def test_pricing_overlay_ignores_unknown_models(restore_pricing):
+    # A model not in MODEL_PRESETS must never be created by the overlay.
+    set_pricing_overlay({"models": {"ghost-model": {"paygo_input_per_1m": 1.0}}, "generated_utc": "x"})
+    assert "ghost-model" not in MODEL_PRESETS
+
 
 
 def test_paygo_rates_apply_confirmed_tier_delta():
