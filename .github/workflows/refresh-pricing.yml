@@ -1,0 +1,60 @@
+name: Refresh pricing
+
+# Weekly, review-gated refresh of the per-model pricing overlay
+# (app/pricing_data.json). This job NEVER pushes to main — it opens a pull
+# request with the parsed price deltas for a human to verify and merge. Pricing
+# changes rarely and scraping a marketing page can be wrong, so the PR gate is
+# intentional.
+
+on:
+  schedule:
+    # Mondays at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refresh pricing overlay
+        run: python scripts/refresh_pricing.py
+
+      - name: Sanity-check the module still imports with the new overlay
+        run: python -c "import sys; sys.path.insert(0, 'app'); import ptu_core; print('pricing source:', ptu_core.pricing_data_source())"
+
+      - name: Open a PR if pricing changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          add-paths: app/pricing_data.json
+          branch: automation/refresh-pricing
+          delete-branch: true
+          commit-message: "chore: refresh pricing_data.json from Azure pricing pages"
+          title: "Weekly pricing refresh"
+          labels: |
+            pricing
+            automated
+          body: |
+            Automated weekly refresh of `app/pricing_data.json` from the
+            **Azure Retail Prices API** (`prices.azure.com`).
+
+            ⚠️ **Review the price deltas before merging.** Meter names in the
+            retail feed can change or be mis-mapped. Confirm each changed rate
+            against the pricing pages:
+            - Azure OpenAI: https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/
+            - DeepSeek: https://azure.microsoft.com/pricing/details/ai-foundry-models/deepseek/
+
+            Only Global Standard PAYGO rates for models in `scripts/refresh_pricing.py`
+            `_METER_SPECS` are updated. Priority rates and models not yet in the
+            retail feed (gpt-5.x, DeepSeek) keep their reviewed values. The
+            built-in fallback pricing in `ptu_core.MODEL_PRESETS` stays in effect
+            until this is merged.
