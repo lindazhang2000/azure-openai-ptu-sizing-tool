@@ -18,7 +18,9 @@ import os
 # All pricing constants in this module (deployment hourly $/PTU, reservation
 # discounts, and per-model PAYGO $/1M-token rates) were confirmed against the
 # Azure OpenAI pricing page on the date below. Bump this when you re-verify or
-# update any price so drift is obvious in one place.
+# update any price so drift is obvious in one place. The per-model PAYGO/priority
+# rates in MODEL_PRESETS are the built-in *fallback*: a committed
+# ``pricing_data.json`` overlay (see below) can override them without code edits.
 PRICING_CONFIRMED_AS_OF = "2026-06-25"
 PRICING_SOURCE_URL = (
     "https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/"
@@ -140,16 +142,144 @@ def priority_supported(deployment_type):
 # these keys — gpt-4.1-nano, gpt-4o, and Llama-3.3-70B do not support it and so
 # omit them. Re-verify all values against current docs.
 MODEL_PRESETS = {
+    "gpt-5.5": {"model_tpm_per_ptu": 1200, "output_weight": 6.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 5.0, "paygo_cached_per_1m": 0.5, "paygo_output_per_1m": 30.0, "priority_input_per_1m": 12.50, "priority_cached_per_1m": 1.25, "priority_output_per_1m": 75.0},
+    "gpt-5.4": {"model_tpm_per_ptu": 2400, "output_weight": 6.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 2.50, "paygo_cached_per_1m": 0.25, "paygo_output_per_1m": 15.0, "priority_input_per_1m": 5.0, "priority_cached_per_1m": 0.5, "priority_output_per_1m": 30.0},
+    "gpt-5.4-mini": {"model_tpm_per_ptu": 7900, "output_weight": 6.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.75, "paygo_cached_per_1m": 0.08, "paygo_output_per_1m": 4.50, "priority_input_per_1m": 1.50, "priority_cached_per_1m": 0.15, "priority_output_per_1m": 9.0},
+    "gpt-5.3-codex": {"model_tpm_per_ptu": 3400, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Regional"], "paygo_input_per_1m": 1.75, "paygo_cached_per_1m": 0.18, "paygo_output_per_1m": 14.0, "priority_input_per_1m": 3.50, "priority_cached_per_1m": 0.35, "priority_output_per_1m": 28.0},
     "gpt-5.2": {"model_tpm_per_ptu": 3400, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global"], "paygo_input_per_1m": 1.75, "paygo_cached_per_1m": 0.18, "paygo_output_per_1m": 14.0, "priority_input_per_1m": 3.50, "priority_cached_per_1m": 0.35, "priority_output_per_1m": 28.0},
+    "gpt-5.2-codex": {"model_tpm_per_ptu": 3400, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global"], "paygo_input_per_1m": 1.75, "paygo_cached_per_1m": 0.18, "paygo_output_per_1m": 14.0},
     "gpt-5.1": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0, "priority_input_per_1m": 2.50, "priority_cached_per_1m": 0.25, "priority_output_per_1m": 20.0},
+    "gpt-5.1-codex": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0},
     "gpt-5": {"model_tpm_per_ptu": 4750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 1.25, "paygo_cached_per_1m": 0.13, "paygo_output_per_1m": 10.0, "priority_input_per_1m": 2.50, "priority_cached_per_1m": 0.25, "priority_output_per_1m": 20.0},
     "gpt-5-mini": {"model_tpm_per_ptu": 23750, "output_weight": 8.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.25, "paygo_cached_per_1m": 0.03, "paygo_output_per_1m": 2.0, "priority_input_per_1m": 0.45, "priority_cached_per_1m": 0.05, "priority_output_per_1m": 3.60},
     "gpt-4.1": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 2.0, "paygo_cached_per_1m": 0.5, "paygo_output_per_1m": 8.0, "priority_input_per_1m": 3.50, "priority_cached_per_1m": 0.88, "priority_output_per_1m": 14.0},
     "gpt-4.1-mini": {"model_tpm_per_ptu": 14900, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.4, "paygo_cached_per_1m": 0.1, "paygo_output_per_1m": 1.6, "priority_input_per_1m": 0.70, "priority_cached_per_1m": 0.18, "priority_output_per_1m": 2.80},
     "gpt-4.1-nano": {"model_tpm_per_ptu": 59400, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.1, "paygo_cached_per_1m": 0.03, "paygo_output_per_1m": 0.4},
     "gpt-4o": {"model_tpm_per_ptu": 2500, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 2.5, "paygo_cached_per_1m": 1.25, "paygo_output_per_1m": 10.0},
+    "gpt-4o-mini": {"model_tpm_per_ptu": 37000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 0.15, "paygo_cached_per_1m": 0.075, "paygo_output_per_1m": 0.60},
+    "o4-mini": {"model_tpm_per_ptu": 5400, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 1.10, "paygo_cached_per_1m": 0.28, "paygo_output_per_1m": 4.40},
+    "o3": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 50, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 2.0, "paygo_cached_per_1m": 0.5, "paygo_output_per_1m": 8.0},
+    "o3-mini": {"model_tpm_per_ptu": 2500, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 25, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 1.10, "paygo_cached_per_1m": 0.55, "paygo_output_per_1m": 4.40},
+    "o1": {"model_tpm_per_ptu": 230, "output_weight": 4.0, "min_ptu_commit": 15, "ptu_scale_increment": 5, "regional_min_ptu_commit": 25, "regional_ptu_scale_increment": 50, "available_deployments": ["Global", "Data Zone", "Regional"], "paygo_input_per_1m": 15.0, "paygo_cached_per_1m": 7.50, "paygo_output_per_1m": 60.0},
     "Llama-3.3-70B": {"model_tpm_per_ptu": 8450, "output_weight": 4.0, "min_ptu_commit": 100, "ptu_scale_increment": 100, "regional_min_ptu_commit": 100, "regional_ptu_scale_increment": 100, "available_deployments": ["Global"]},
+    # DeepSeek / Fireworks MaaS models: no published prompt-cache rate, so
+    # `paygo_cached_per_1m` is set equal to the input rate (no cache discount) as
+    # a conservative default. Regional provisioned is not offered (NA).
+    "DeepSeek-R1": {"model_tpm_per_ptu": 4000, "output_weight": 4.0, "min_ptu_commit": 100, "ptu_scale_increment": 100, "available_deployments": ["Global"], "paygo_input_per_1m": 1.35, "paygo_cached_per_1m": 1.35, "paygo_output_per_1m": 5.40},
+    "DeepSeek-R1-0528": {"model_tpm_per_ptu": 4000, "output_weight": 4.0, "min_ptu_commit": 100, "ptu_scale_increment": 100, "available_deployments": ["Global"], "paygo_input_per_1m": 1.35, "paygo_cached_per_1m": 1.35, "paygo_output_per_1m": 5.40},
+    "DeepSeek-V3-0324": {"model_tpm_per_ptu": 4000, "output_weight": 4.0, "min_ptu_commit": 100, "ptu_scale_increment": 100, "available_deployments": ["Global"], "paygo_input_per_1m": 1.14, "paygo_cached_per_1m": 1.14, "paygo_output_per_1m": 4.56},
+    "DeepSeek-V3.2": {"model_tpm_per_ptu": 3000, "output_weight": 4.0, "min_ptu_commit": 300, "ptu_scale_increment": 150, "available_deployments": ["Global", "Data Zone"], "paygo_input_per_1m": 0.58, "paygo_cached_per_1m": 0.58, "paygo_output_per_1m": 1.68},
 }
+
+
+# --- Pricing overlay (pricing_data.json) --------------------------------------
+# The per-model PAYGO/priority rates in MODEL_PRESETS above are the built-in
+# *fallback*. A committed ``app/pricing_data.json`` (regenerated by a
+# review-gated weekly job) can override those rates without editing code, so a
+# bad scrape can never corrupt the module — at worst it is an unmerged JSON
+# change. The overlay only *overrides* the numeric pricing fields listed below;
+# every other preset field (throughput, minimums, deployment types) always comes
+# from the code. Non-numeric, negative, or unknown values are ignored.
+_PRICING_KEYS = (
+    "paygo_input_per_1m",
+    "paygo_cached_per_1m",
+    "paygo_output_per_1m",
+    "priority_input_per_1m",
+    "priority_cached_per_1m",
+    "priority_output_per_1m",
+)
+
+# Immutable snapshot of the built-in pricing, used as the fallback and to make
+# overlay application idempotent (restore-then-merge).
+_STATIC_PRICING = {
+    name: {k: preset[k] for k in _PRICING_KEYS if k in preset}
+    for name, preset in MODEL_PRESETS.items()
+}
+
+# (("generated_utc", "source")) when a live overlay is applied, else None.
+_PRICING_OVERLAY_META = None
+
+_PRICING_DATA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pricing_data.json")
+
+
+def _valid_price(value):
+    """True if value is a real, non-negative number safe to use as a price."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    )
+
+
+def _apply_pricing_overlay(data):
+    """Overlay validated per-model pricing onto MODEL_PRESETS (idempotent).
+
+    Always restores the built-in pricing first, then merges any valid numeric
+    pricing fields from ``data`` on top. Unknown models, unknown keys, and
+    non-numeric/negative values are ignored so a malformed file can never break
+    or misprice the module. Returns ``True`` when a well-formed overlay was
+    applied, ``False`` when ``data`` is absent/malformed (fallback in effect).
+    """
+    global _PRICING_OVERLAY_META
+    # Restore built-in pricing so re-applying and reverting are clean.
+    for name, preset in MODEL_PRESETS.items():
+        static = _STATIC_PRICING.get(name, {})
+        for key in _PRICING_KEYS:
+            if key in static:
+                preset[key] = static[key]
+            else:
+                preset.pop(key, None)
+
+    if not (isinstance(data, dict) and isinstance(data.get("models"), dict)):
+        _PRICING_OVERLAY_META = None
+        return False
+
+    for name, prices in data["models"].items():
+        if name not in MODEL_PRESETS or not isinstance(prices, dict):
+            continue
+        for key in _PRICING_KEYS:
+            if key in prices and _valid_price(prices[key]):
+                MODEL_PRESETS[name][key] = float(prices[key])
+    _PRICING_OVERLAY_META = (data.get("generated_utc"), data.get("source"))
+    return True
+
+
+def _load_pricing_overlay():
+    """Load ``pricing_data.json`` if present and well-formed, else return None."""
+    try:
+        with open(_PRICING_DATA_PATH, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    if isinstance(data, dict) and isinstance(data.get("models"), dict):
+        return data
+    return None
+
+
+def set_pricing_overlay(data):
+    """Override the in-memory per-model pricing overlay.
+
+    ``data`` must match ``pricing_data.json`` shape (a dict with a ``models``
+    mapping of model -> pricing fields). Pass ``None`` to revert to the built-in
+    static pricing. Returns ``True`` when a live overlay was applied.
+    """
+    return _apply_pricing_overlay(data)
+
+
+def pricing_data_source():
+    """Describe where per-model pricing comes from.
+
+    Returns ``("live", generated_utc)`` when a pricing overlay is applied, or
+    ``("static", None)`` when using the built-in fallback rates.
+    """
+    if _PRICING_OVERLAY_META:
+        return ("live", _PRICING_OVERLAY_META[0])
+    return ("static", None)
+
+
+# Apply the committed overlay (if any) at import time.
+_apply_pricing_overlay(_load_pricing_overlay())
 
 
 def available_deployment_types(preset, model_preset_name=None):
@@ -276,6 +406,29 @@ def region_data_source():
     if _LIVE_REGION_DATA:
         return ("live", _LIVE_REGION_DATA.get("generated_utc"))
     return ("static", None)
+
+
+def has_preset(model_preset_name):
+    """Return True if the model has a curated MODEL_PRESETS entry.
+
+    A curated preset carries confirmed economics (throughput per PTU, minimum
+    commit, and pricing). Models discovered only from the live catalog return
+    ``False`` and fall back to the editable DEFAULTS for those fields.
+    """
+    return model_preset_name in MODEL_PRESETS
+
+
+def catalog_model_names():
+    """Return model names discovered from live region data (``region_data.json``).
+
+    These are the models the live Azure catalog reported as offering provisioned
+    throughput, including any that do not have a curated ``MODEL_PRESETS`` entry.
+    Returns an empty list when no live region data is loaded (the app then offers
+    only the curated presets). The list is sorted for stable dropdown ordering.
+    """
+    if _LIVE_REGION_DATA:
+        return sorted(_LIVE_REGION_DATA["models"].keys())
+    return []
 
 
 # Indicative region availability for provisioned throughput, by deployment type.

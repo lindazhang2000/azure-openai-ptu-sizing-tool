@@ -1,0 +1,152 @@
+{
+  "generated_utc": "2026-07-01T19:19:11.645325+00:00",
+  "source": "Azure Retail Prices API (prices.azure.com) \u2014 serviceName 'Foundry Models'",
+  "notes": "Per-model Global Standard PAYGO and Global priority-processing rates ($/1M tokens). Overrides the built-in fallback pricing in ptu_core.MODEL_PRESETS. Only numeric pricing fields are applied; a malformed value or unknown model is ignored. DeepSeek models have no published prompt-cache rate, so paygo_cached_per_1m equals the input rate (no cache discount).",
+  "models": {
+    "gpt-5.5": {
+      "paygo_input_per_1m": 5.0,
+      "paygo_cached_per_1m": 0.5,
+      "paygo_output_per_1m": 30.0,
+      "priority_input_per_1m": 12.5,
+      "priority_cached_per_1m": 1.25,
+      "priority_output_per_1m": 75.0
+    },
+    "gpt-5.4": {
+      "paygo_input_per_1m": 2.5,
+      "paygo_cached_per_1m": 0.25,
+      "paygo_output_per_1m": 15.0,
+      "priority_input_per_1m": 5.0,
+      "priority_cached_per_1m": 0.5,
+      "priority_output_per_1m": 30.0
+    },
+    "gpt-5.4-mini": {
+      "paygo_input_per_1m": 0.75,
+      "paygo_cached_per_1m": 0.08,
+      "paygo_output_per_1m": 4.5,
+      "priority_input_per_1m": 1.5,
+      "priority_cached_per_1m": 0.15,
+      "priority_output_per_1m": 9.0
+    },
+    "gpt-5.3-codex": {
+      "paygo_input_per_1m": 1.75,
+      "paygo_cached_per_1m": 0.18,
+      "paygo_output_per_1m": 14.0,
+      "priority_input_per_1m": 3.5,
+      "priority_cached_per_1m": 0.35,
+      "priority_output_per_1m": 28.0
+    },
+    "gpt-5.2": {
+      "paygo_input_per_1m": 1.75,
+      "paygo_cached_per_1m": 0.18,
+      "paygo_output_per_1m": 14.0,
+      "priority_input_per_1m": 3.5,
+      "priority_cached_per_1m": 0.35,
+      "priority_output_per_1m": 28.0
+    },
+    "gpt-5.2-codex": {
+      "paygo_input_per_1m": 1.75,
+      "paygo_cached_per_1m": 0.18,
+      "paygo_output_per_1m": 14.0
+    },
+    "gpt-5.1": {
+      "paygo_input_per_1m": 1.25,
+      "paygo_cached_per_1m": 0.13,
+      "paygo_output_per_1m": 10.0,
+      "priority_input_per_1m": 2.5,
+      "priority_cached_per_1m": 0.25,
+      "priority_output_per_1m": 20.0
+    },
+    "gpt-5.1-codex": {
+      "paygo_input_per_1m": 1.25,
+      "paygo_cached_per_1m": 0.13,
+      "paygo_output_per_1m": 10.0
+    },
+    "gpt-5": {
+      "paygo_input_per_1m": 1.25,
+      "paygo_cached_per_1m": 0.13,
+      "paygo_output_per_1m": 10.0,
+      "priority_input_per_1m": 2.5,
+      "priority_cached_per_1m": 0.25,
+      "priority_output_per_1m": 20.0
+    },
+    "gpt-5-mini": {
+      "paygo_input_per_1m": 0.25,
+      "paygo_cached_per_1m": 0.03,
+      "paygo_output_per_1m": 2.0,
+      "priority_input_per_1m": 0.45,
+      "priority_cached_per_1m": 0.05,
+      "priority_output_per_1m": 3.6
+    },
+    "gpt-4.1": {
+      "paygo_input_per_1m": 2.0,
+      "paygo_cached_per_1m": 0.5,
+      "paygo_output_per_1m": 8.0,
+      "priority_input_per_1m": 3.5,
+      "priority_cached_per_1m": 0.88,
+      "priority_output_per_1m": 14.0
+    },
+    "gpt-4.1-mini": {
+      "paygo_input_per_1m": 0.4,
+      "paygo_cached_per_1m": 0.1,
+      "paygo_output_per_1m": 1.6,
+      "priority_input_per_1m": 0.7,
+      "priority_cached_per_1m": 0.18,
+      "priority_output_per_1m": 2.8
+    },
+    "gpt-4.1-nano": {
+      "paygo_input_per_1m": 0.1,
+      "paygo_cached_per_1m": 0.025,
+      "paygo_output_per_1m": 0.4
+    },
+    "gpt-4o": {
+      "paygo_input_per_1m": 2.5,
+      "paygo_cached_per_1m": 1.25,
+      "paygo_output_per_1m": 10.0
+    },
+    "gpt-4o-mini": {
+      "paygo_input_per_1m": 0.15,
+      "paygo_cached_per_1m": 0.075,
+      "paygo_output_per_1m": 0.6
+    },
+    "o4-mini": {
+      "paygo_input_per_1m": 1.1,
+      "paygo_cached_per_1m": 0.275,
+      "paygo_output_per_1m": 4.4
+    },
+    "o3": {
+      "paygo_input_per_1m": 2.0,
+      "paygo_cached_per_1m": 0.5,
+      "paygo_output_per_1m": 8.0
+    },
+    "o3-mini": {
+      "paygo_input_per_1m": 1.1,
+      "paygo_cached_per_1m": 0.55,
+      "paygo_output_per_1m": 4.4
+    },
+    "o1": {
+      "paygo_input_per_1m": 15.0,
+      "paygo_cached_per_1m": 7.5,
+      "paygo_output_per_1m": 60.0
+    },
+    "DeepSeek-R1": {
+      "paygo_input_per_1m": 1.35,
+      "paygo_cached_per_1m": 1.35,
+      "paygo_output_per_1m": 5.4
+    },
+    "DeepSeek-R1-0528": {
+      "paygo_input_per_1m": 1.35,
+      "paygo_cached_per_1m": 1.35,
+      "paygo_output_per_1m": 5.4
+    },
+    "DeepSeek-V3-0324": {
+      "paygo_input_per_1m": 1.14,
+      "paygo_cached_per_1m": 1.14,
+      "paygo_output_per_1m": 4.56
+    },
+    "DeepSeek-V3.2": {
+      "paygo_input_per_1m": 0.58,
+      "paygo_cached_per_1m": 0.58,
+      "paygo_output_per_1m": 1.68
+    }
+  }
+}

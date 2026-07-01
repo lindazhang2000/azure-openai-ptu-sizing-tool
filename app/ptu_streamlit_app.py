@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 
 import ptu_core
-from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, PRICING_CONFIRMED_AS_OF, PRICING_SOURCE_URL, available_deployment_types, available_regions, breakeven_series, build_report_csv, build_report_html, calculate, deployment_hourly_price, deployment_minimums, model_supports_priority, paygo_rates, priority_rates, priority_supported, region_data_source, region_supported, sensitivity_table, spillover_supported, validate_inputs
+from ptu_core import DEFAULTS, DEPLOYMENT_TYPES, MODEL_PRESETS, PRICING_CONFIRMED_AS_OF, PRICING_SOURCE_URL, available_deployment_types, available_regions, breakeven_series, build_report_csv, build_report_html, calculate, catalog_model_names, deployment_hourly_price, deployment_minimums, has_preset, model_supports_priority, paygo_rates, pricing_data_source, priority_rates, priority_supported, region_data_source, region_supported, sensitivity_table, spillover_supported, validate_inputs
 
 st.set_page_config(page_title="Azure OpenAI PTU Sizing & Architecture Guidance Tool", page_icon="⚡", layout="wide")
 
@@ -62,6 +62,19 @@ DEPENDENT_KEYS = [
     "priority_cached_per_1m",
     "priority_output_per_1m",
 ]
+
+
+def model_options():
+    """Ordered model choices for the preset dropdown.
+
+    ``Custom`` first, then the curated presets (which carry confirmed
+    throughput/pricing), then any additional models discovered from the live
+    Azure catalog (``region_data.json``) that lack a curated preset. Catalog-only
+    models size against the editable DEFAULTS until a preset is added.
+    """
+    curated = list(MODEL_PRESETS.keys())
+    catalog_only = [m for m in catalog_model_names() if m not in MODEL_PRESETS]
+    return ["Custom"] + curated + catalog_only
 
 
 def compute_defaults(selected_model, deployment_type, foundry_mode):
@@ -128,7 +141,7 @@ _SHARE_FLOAT_KEYS = (
 def _hydrate_from_query_params():
     """Seed session state from a shared URL (validated), run once at first load."""
     qp = st.query_params
-    valid_models = ["Custom"] + list(MODEL_PRESETS.keys())
+    valid_models = model_options()
     model = qp.get("selected_model")
     if model in valid_models:
         st.session_state["selected_model"] = model
@@ -236,14 +249,16 @@ left, right = st.columns([1.25, 0.75], gap="large")
 
 with left:
     st.subheader("Workload inputs")
-    preset_options = ["Custom"] + list(MODEL_PRESETS.keys())
+    preset_options = model_options()
     selected_model = st.selectbox(
         "Model preset",
         preset_options,
         key="selected_model",
-        help="Fills model throughput, output weighting, minimum commit, and scale increment from the official PTU sizing tables. Choose Custom to edit them freely.",
+        help="Fills model throughput, output weighting, minimum commit, and pricing from the official PTU sizing tables. Curated presets carry confirmed economics; models listed from the live Azure catalog (below the presets) size against editable estimates. Choose Custom to edit everything freely.",
     )
     preset = MODEL_PRESETS.get(selected_model, {})
+    if selected_model != "Custom" and not has_preset(selected_model):
+        st.caption("ℹ️ From the live Azure catalog — no curated preset yet. Deployment types and regions are live, but **throughput (TPM/PTU) and pricing are editable estimates** seeded from defaults. Confirm against the official PTU tables and pricing page before committing.")
 
     deployment_options = available_deployment_types(preset, selected_model)
     if st.session_state["deployment_type"] not in deployment_options:
@@ -371,6 +386,17 @@ with left:
             ptu_scale_increment = st.number_input("PTU scale increment", min_value=1.0, step=1.0, disabled=bool(preset), key="ptu_scale_increment", help="Step size PTUs are sold in above the minimum (e.g. 5). The recommendation is rounded up to a multiple of this. Locked under a preset.")
 
     with st.expander("Cost assumptions", expanded=True):
+        _pricing_src, _pricing_asof = pricing_data_source()
+        if _pricing_src == "live":
+            _p_asof = (_pricing_asof or "")[:10]
+            _p_age = _region_data_age_days(_pricing_asof)
+            _p_stale = (
+                f" ⚠️ This overlay is {_p_age} days old — re-run `scripts/refresh_pricing.py` and merge the updated pricing_data.json."
+                if _p_age is not None and _p_age > 45 else ""
+            )
+            st.caption(f"💲 Per-model pricing: **live** from pricing_data.json (confirmed {_p_asof}).{_p_stale}")
+        else:
+            st.caption(f"💲 Per-model pricing: **built-in defaults** (confirmed {PRICING_CONFIRMED_AS_OF}) — pricing_data.json overlay not loaded.")
         st.caption("Hourly price is differentiated by deployment type (Global lowest → Data Zone → Regional); reservation prices do not vary by type. Hourly/reservation values confirmed against the Azure OpenAI pricing page (Provisioned table). PAYGO defaults track the selected model **and** deployment type — Global Standard base, with Data Zone/Regional Standard exactly 10% higher (confirmed). Re-verify before quoting.")
         b1, b2, b3, b4 = st.columns(4)
         with b1:
