@@ -1,5 +1,7 @@
 # Azure OpenAI PTU Sizing & Architecture Guidance Tool
 
+**Live app:** [ptu-sizing.com](https://ptu-sizing.com) — hosted, no install required.
+
 This package contains two front-ends over the shared `ptu_core` sizing engine:
 
 1. **Streamlit app** – `ptu_streamlit_app.py`

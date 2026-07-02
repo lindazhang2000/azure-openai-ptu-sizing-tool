@@ -18,6 +18,9 @@ description: Architecture-first PTU sizing tool for Azure OpenAI — decide PTU 
 <!-- CI status for the published repo. -->
 [![CI](https://github.com/lindazhang2000/azure-openai-ptu-sizing-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/lindazhang2000/azure-openai-ptu-sizing-tool/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Live app](https://img.shields.io/badge/Live%20app-ptu--sizing.com-2ea44f)](https://ptu-sizing.com)
+
+> 🔗 **Try it live: [ptu-sizing.com](https://ptu-sizing.com)** — no install required.
 
 > ⭐ If this helps you, please star the repo and share with your team.
 
@@ -142,6 +145,8 @@ This tool provides **directional guidance only** and is not an official Azure ca
 ---
 
 ## 🚀 Start here (2 minutes)
+
+**Fastest path:** open the hosted app at **[ptu-sizing.com](https://ptu-sizing.com)** — nothing to install.
 
 1. Enter:
    - RPM
