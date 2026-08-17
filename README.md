@@ -22,6 +22,12 @@ description: Architecture-first PTU sizing tool for Azure OpenAI — decide PTU 
 
 > 🔗 **Try it live: [ptu-sizing.com](https://ptu-sizing.com)** — no install required.
 
+> 🎬 **Watch a 75-second narrated walkthrough:** [docs/demo/ptu-sizing-demo-narrated.mp4](docs/demo/ptu-sizing-demo-narrated.mp4)
+
+[![PTU sizing tool demo — click for the narrated video](docs/demo/ptu-sizing-demo-preview.gif)](docs/demo/ptu-sizing-demo-narrated.mp4)
+
+<sub>Preview above is a lighter GIF · full-resolution GIF: [docs/demo/ptu-sizing-demo.gif](docs/demo/ptu-sizing-demo.gif)</sub>
+
 > ⭐ If this helps you, please star the repo and share with your team.
 
 ---
