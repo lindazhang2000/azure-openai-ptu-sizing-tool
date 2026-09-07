@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-07-01T19:19:11.645325+00:00",
+  "generated_utc": "2026-09-07T11:59:34.143606+00:00",
   "source": "Azure Retail Prices API (prices.azure.com) \u2014 serviceName 'Foundry Models'",
   "notes": "Per-model Global Standard PAYGO and Global priority-processing rates ($/1M tokens). Overrides the built-in fallback pricing in ptu_core.MODEL_PRESETS. Only numeric pricing fields are applied; a malformed value or unknown model is ignored. DeepSeek models have no published prompt-cache rate, so paygo_cached_per_1m equals the input rate (no cache discount).",
   "models": {
